@@ -198,16 +198,24 @@ private class DrawableShader extends h3d.impl.Shader {
 		#end
 		
 		uniform lowp float alpha;
+        #if hasColorKey
 		uniform lowp vec3 colorKey/*byte4*/;
+        #end
 	
+        #if hasColorAdd
 		uniform lowp vec4 colorAdd;
+        #end
+        #if hasColorMul
 		uniform lowp vec4 colorMul;
+        #end
+        #if hasColorMatrix
 		uniform mediump mat4 colorMatrix;
+        #end
 
 		void main(void) {
 			lowp vec4 col = texture2D(tex, tuv);
 			#if killAlpha
-				if( c.a - 0.001 ) discard;
+				if( col.a < 1.0) discard;
 			#end
 			#if hasColorKey
 				lowp vec3 dc = col.rgb - colorKey;
