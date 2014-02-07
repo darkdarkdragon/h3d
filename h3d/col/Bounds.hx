@@ -15,31 +15,18 @@ class Bounds {
 	}
 	
 	public function inFrustum( mvp : Matrix ) {
-
-		// left
-		if( testPlane(new Plane(mvp._14 + mvp._11, mvp._24 + mvp._21 , mvp._34 + mvp._31, -(mvp._44 + mvp._41))) < 0 )
+		if( testPlane(Plane.frustumLeft(mvp)) < 0 )
 			return false;
-		
-		// right
-		if( testPlane(new Plane(mvp._14 - mvp._11, mvp._24 - mvp._21 , mvp._34 - mvp._31, mvp._41 - mvp._44)) < 0 )
+		if( testPlane(Plane.frustumRight(mvp)) < 0 )
 			return false;
-
-		// bottom
-		if( testPlane(new Plane(mvp._14 + mvp._12, mvp._24 + mvp._22 , mvp._34 + mvp._32, -(mvp._44 + mvp._42))) < 0 )
+		if( testPlane(Plane.frustumBottom(mvp)) < 0 )
 			return false;
-
-		// top
-		if( testPlane(new Plane(mvp._14 - mvp._12, mvp._24 - mvp._22 , mvp._34 - mvp._32, mvp._42 - mvp._44)) < 0 )
+		if( testPlane(Plane.frustumTop(mvp)) < 0 )
 			return false;
-
-		// near
-		if( testPlane(new Plane(mvp._13, mvp._23, mvp._33, -mvp._43)) < 0 )
+		if( testPlane(Plane.frustumNear(mvp)) < 0 )
 			return false;
-
-		// far
-		if( testPlane(new Plane(mvp._14 - mvp._13, mvp._24 - mvp._23, mvp._34 - mvp._33, mvp._43 - mvp._44)) < 0 )
+		if( testPlane(Plane.frustumFar(mvp)) < 0 )
 			return false;
-			
 		return true;
 	}
 	
@@ -230,12 +217,12 @@ class Bounds {
 		var mx = (xMax + xMin) * 0.5;
 		var my = (yMax + yMin) * 0.5;
 		var mz = (zMax + zMin) * 0.5;
-		xMin = mx - dx * v;
-		yMin = my - dy * v;
-		zMin = mz - dz * v;
-		xMax = mx + dx * v;
-		yMax = my + dy * v;
-		zMax = mz + dz * v;
+		xMin = mx - dx;
+		yMin = my - dy;
+		zMin = mz - dz;
+		xMax = mx + dx;
+		yMax = my + dy;
+		zMax = mz + dz;
 	}
 	
 	public inline function getMin() {

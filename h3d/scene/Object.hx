@@ -107,8 +107,8 @@ class Object {
 		} else if( posChanged ) {
 			for( c in childs )
 				c.posChanged = true;
-			calcAbsPos();
 			posChanged = false;
+			calcAbsPos();
 		}
 		for( c in childs )
 			c.getBounds(b);
@@ -134,6 +134,7 @@ class Object {
 		o.scaleY = scaleY;
 		o.scaleZ = scaleZ;
 		o.name = name;
+		o.follow = follow;
 		if( defaultTransform != null )
 			o.defaultTransform = defaultTransform.clone();
 		for( c in childs ) {
@@ -208,13 +209,13 @@ class Object {
 		absPos._41 = x;
 		absPos._42 = y;
 		absPos._43 = z;
+		if( defaultTransform != null )
+			absPos.multiply3x4(absPos, defaultTransform);
 		if( follow != null ) {
 			follow.syncPos();
 			absPos.multiply3x4(absPos, follow.absPos);
 			posChanged = true;
 		} else {
-			if( defaultTransform != null )
-				absPos.multiply3x4(absPos, defaultTransform);
 			if( parent != null )
 				absPos.multiply3x4(absPos, parent.absPos);
 		}
@@ -261,10 +262,10 @@ class Object {
 	function syncPos() {
 		if( parent != null ) parent.syncPos();
 		if( posChanged ) {
+			posChanged = false;
 			calcAbsPos();
 			for( c in childs )
 				c.posChanged = true;
-			posChanged = false;
 		}
 	}
 	
@@ -274,10 +275,10 @@ class Object {
 		if( posChanged ) {
 			// only sync anim, don't update() (prevent any event from occuring during draw())
 			if( currentAnimation != null ) currentAnimation.sync();
+			posChanged = false;
 			calcAbsPos();
 			for( c in childs )
 				c.posChanged = true;
-			posChanged = false;
 		}
 		draw(ctx);
 		for( c in childs )
@@ -347,7 +348,7 @@ class Object {
 	public function rotate( rx : Float, ry : Float, rz : Float ) {
 		var qTmp = new h3d.Quat();
 		qTmp.initRotate(rx, ry, rz);
-		qRot.add(qTmp);
+		qRot.multiply(qTmp,qRot);
 		posChanged = true;
 	}
 	

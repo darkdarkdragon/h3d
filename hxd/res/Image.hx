@@ -1,6 +1,6 @@
 package hxd.res;
 
-class Texture extends Resource {
+class Image extends Resource {
 	
 	var needResize : Bool;
 	var tex : h3d.mat.Texture;
@@ -156,8 +156,8 @@ class Texture extends Resource {
 				tex.height = th;
 			}
 		}
-		
 		loadTexture();
+		tex.setName(entry.path);
 		tex.onContextLost = function() {
 			needResize = false;
 			loadTexture();

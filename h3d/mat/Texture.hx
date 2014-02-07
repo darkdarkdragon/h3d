@@ -12,7 +12,8 @@ class Texture {
 	#if debug
 	var allocPos : h3d.impl.AllocPos;
 	#end
-	public var id(default,null) : Int;
+	public var id(default, null) : Int;
+	public var name(default, null) : String;
 	public var width(default, null) : Int;
 	public var height(default, null) : Int;
 	public var isCubic(default, null) : Bool;
@@ -44,6 +45,14 @@ class Texture {
 		this.filter = Linear;
 		this.wrap = Clamp;
 		bits &= 0x7FFF;
+	}
+	
+	function toString() {
+		return name+" "+width+"x"+height;
+	}
+	
+	public function setName(n) {
+		name = n;
 	}
 
 	function set_mipMap(m:MipMap) {
@@ -153,6 +162,11 @@ class Texture {
 		tmpPixels.bytes.set(3, color>>>24);
 		t.uploadPixels(tmpPixels);
 		return t;
+	}
+	
+	public static function alloc( width : Int, height : Int, isTarget = false, ?allocPos : h3d.impl.AllocPos ) {
+		var engine = h3d.Engine.getCurrent();
+		return isTarget ? engine.mem.allocTargetTexture(width, height, allocPos) : engine.mem.allocTexture(width, height, null, allocPos);
 	}
 
 }

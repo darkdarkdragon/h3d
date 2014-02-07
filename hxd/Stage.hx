@@ -194,6 +194,7 @@ class Stage {
 		ev.keyCode = e.keyCode;
 		ev.charCode = getCharCode(e);
 		event(ev);
+		#if flash
 		// prevent escaping fullscreen in air
 		if( e.keyCode == flash.ui.Keyboard.ESCAPE ) e.preventDefault();
 		// prevent back exiting app in mobile
@@ -201,6 +202,7 @@ class Stage {
 			e.preventDefault();
 			e.stopImmediatePropagation();
 		}
+		#end
 	}
 	
 	function getCharCode( e : flash.events.KeyboardEvent ) {

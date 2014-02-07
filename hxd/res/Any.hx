@@ -27,28 +27,28 @@ class Any extends Resource {
 		this.loader = loader;
 	}
 	
-	public function toModel() {
-		return loader.loadModel(entry.path);
+	public function toFbx() {
+		return loader.loadFbxModel(entry.path).toFbx(loader);
 	}
 	
-	public function toFbx() {
-		return loader.loadModel(entry.path).toFbx();
+	public function toAwd() {
+		return loader.loadAwdModel(entry.path);
 	}
 
 	public function toTexture() {
-		return loader.loadTexture(entry.path).toTexture();
+		return loader.loadImage(entry.path).toTexture();
 	}
 	
 	public function toTile() {
-		return loader.loadTexture(entry.path).toTile();
+		return loader.loadImage(entry.path).toTile();
 	}
 	
 	public function toString() {
 		return entry.getBytes().toString();
 	}
 
-	public function getTexture() {
-		return loader.loadTexture(entry.path);
+	public function toImage() {
+		return loader.loadImage(entry.path);
 	}
 	
 	public function toSound() {
@@ -60,7 +60,7 @@ class Any extends Resource {
 	}
 
 	public function toBitmap() {
-		return loader.loadTexture(entry.path).toBitmap();
+		return loader.loadImage(entry.path).toBitmap();
 	}
 
 	public function toBitmapFont() {

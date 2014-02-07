@@ -4,12 +4,13 @@ class Joint extends Object {
 	public var skin : Skin;
 	public var index : Int;
 	
-	public function new(skin, index) {
+	public function new(skin, j : h3d.anim.Skin.Joint ) {
 		super(null);
+		name = j.name;
 		this.skin = skin;
 		// fake parent
 		this.parent = skin;
-		this.index = index;
+		this.index = j.index;
 	}
 	
 	@:access(h3d.scene.Skin)
@@ -44,7 +45,7 @@ class Joint extends Object {
 	}
 }
 
-class Skin extends Mesh {
+class Skin extends MultiMaterial {
 	
 	var skinData : h3d.anim.Skin;
 	var currentRelPose : Array<h3d.Matrix>;
@@ -65,7 +66,7 @@ class Skin extends Mesh {
 	}
 	
 	override function clone( ?o : Object ) {
-		var s = o == null ? new Skin(null,material) : cast o;
+		var s = o == null ? new Skin(null,materials.copy()) : cast o;
 		super.clone(s);
 		s.setSkinData(skinData);
 		s.currentRelPose = currentRelPose.copy(); // copy current pose
@@ -78,18 +79,18 @@ class Skin extends Mesh {
 		var tmp = primitive.getBounds().clone();
 		var b0 = skinData.allJoints[0];
 		// not sure if that's the good joint
-		if( b0 != null && b0.defMat != null && b0.parent == null ) {
+		if( b0 != null && b0.parent == null ) {
 			var mtmp = absPos.clone();
 			var r = currentRelPose[b0.index];
 			if( r != null )
 				mtmp.multiply3x4(r, mtmp);
 			else
 				mtmp.multiply3x4(b0.defMat, mtmp);
-			mtmp.multiply3x4(b0.transPos, mtmp);
+			if( b0.transPos != null )
+				mtmp.multiply3x4(b0.transPos, mtmp);
 			tmp.transform3x4(mtmp);
-		} else {
+		} else
 			tmp.transform3x4(absPos);
-		}
 		b.add(tmp);
 		return b;
 	}
@@ -101,7 +102,7 @@ class Skin extends Mesh {
 		if( skinData != null ) {
 			var j = skinData.namedJoints.get(name);
 			if( j != null )
-				return new Joint(this, j.index);
+				return new Joint(this, j);
 		}
 		return null;
 	}
@@ -116,7 +117,9 @@ class Skin extends Mesh {
 		skinData = s;
 		jointsUpdated = true;
 		primitive = s.primitive;
-		material.hasSkin = true;
+		for( m in materials )
+			if( m != null )
+				m.hasSkin = true;
 		currentRelPose = [];
 		currentAbsPose = [];
 		currentPalette = [];
@@ -142,10 +145,7 @@ class Skin extends Mesh {
 				var id = j.index;
 				var m = currentAbsPose[id];
 				var r = currentRelPose[id];
-				if( r == null ) {
-					var bid = j.bindIndex;
-					if( bid >= 0 ) r = j.defMat else continue;
-				}
+				if( r == null ) r = j.defMat;
 				if( j.parent == null )
 					m.multiply3x4(r, absPos);
 				else
@@ -165,7 +165,9 @@ class Skin extends Mesh {
 		if( splitPalette == null ) {
 			if( paletteChanged ) {
 				paletteChanged = false;
-				material.skinMatrixes = currentPalette;
+				for( m in materials )
+					if( m != null )
+						m.skinMatrixes = currentPalette;
 			}
 			super.draw(ctx);
 		} else {

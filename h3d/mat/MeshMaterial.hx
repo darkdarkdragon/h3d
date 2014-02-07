@@ -13,6 +13,12 @@ typedef ShadowMap = {
 	var texture : Texture;
 }
 
+typedef DecalInfos = {
+	var depthTexture : Texture;
+	var uvScaleRatio : h3d.Vector;
+	var screenToLocal : h3d.Matrix;
+}
+
 private class MeshShader extends h3d.impl.Shader {
 	
 #if flash
@@ -46,6 +52,7 @@ private class MeshShader extends h3d.impl.Shader {
 		var hasZBias : Bool;
 		
 		var alphaMap : Texture;
+		var alphaMapScroll : Float2;
 		var hasAlphaMap : Bool;
 		
 		var lightSystem : Param < {
@@ -57,7 +64,7 @@ private class MeshShader extends h3d.impl.Shader {
 		var fog : Float4;
 		
 		var glowTexture : Texture;
-		var glowAmount : Float;
+		var glowAmount : Float3;
 		var hasGlow : Bool;
 		
 		var blendTexture : Texture;
@@ -81,6 +88,26 @@ private class MeshShader extends h3d.impl.Shader {
 		var worldNormal : Float3;
 		var worldView : Float3;
 
+		// the decal volume should have its pivot at the center of the box
+		// uvScaleRatio is the size of the box primitive
+		var isDecal : Bool;
+		var depthTexture : Texture;
+		var uvScaleRatio : Float2;
+		var screenToLocal : Matrix;
+		var outProjPos : Float4; // varying
+		
+		var smoothEdges : Bool;
+		var smoothFactor : Float;
+		
+		var writeDistance : Bool;
+		var projCenter : Float3;
+		var distance : Float3;
+		
+		
+		var colorMap : Texture;
+		var colorMapMatrix : Matrix;
+		var hasColorMap : Bool;
+
 		function vertex( mpos : Matrix, mproj : Matrix ) {
 			var tpos = input.pos.xyzw;
 			var tnorm : Float3 = [0, 0, 0];
@@ -93,6 +120,7 @@ private class MeshShader extends h3d.impl.Shader {
 					n *= mpos.m33;
 				tnorm = n.normalize();
 			}
+			
 			if( hasSkin )
 				tpos.xyz = tpos * input.weights.x * skinMatrixes[input.indexes.x * (255 * 3)] + tpos * input.weights.y * skinMatrixes[input.indexes.y * (255 * 3)] + tpos * input.weights.z * skinMatrixes[input.indexes.z * (255 * 3)];
 			else if( mpos != null )
@@ -106,10 +134,18 @@ private class MeshShader extends h3d.impl.Shader {
 			
 			var ppos = tpos * mproj;
 			if( hasZBias ) ppos.z += zBias;
+			
+			if( writeDistance ) {
+				var tmp = projCenter - (ppos.xyz / ppos.w);
+				tmp.y *= -1;
+				distance = tmp;
+			}
+			
 			out = ppos;
 			var t = input.uv;
 			if( uvScale != null ) t *= uvScale;
 			if( uvDelta != null ) t += uvDelta;
+			if( isDecal || smoothEdges ) outProjPos = ppos;
 			tuv = t;
 			if( lightSystem != null ) {
 				// calculate normal
@@ -149,10 +185,33 @@ private class MeshShader extends h3d.impl.Shader {
 				var c = outlineColor;
 				var e = 1 - worldNormal.normalize().dot(worldView.normalize());
 				out = c * e.pow(outlinePower);
+			} else if( isDecal ) {
+				var screenPos = outProjPos.xy / outProjPos.w;
+				var tuv = screenPos * [0.5,-0.5] + [0.5,0.5];
+				var ruv : Float4 = [0,0,0,0];
+				ruv.xy = screenPos;
+				ruv.z = depthTexture.get(tuv).rgb.dot([1,1/255,1/(255*255)]);
+				ruv.w = 1;
+				var wpos = ruv * screenToLocal;
+				var coord = uvScaleRatio * (wpos.xy / wpos.w) + 0.5;
+				kill( min(min(coord.x, coord.y), min(1 - coord.x, 1 - coord.y)) );
+				var c = tex.get(coord.xy);
+				if( killAlpha ) kill(c.a - killAlphaThreshold);
+				if( colorAdd != null ) c += colorAdd;
+				if( colorMul != null ) c = c * colorMul;
+				if( colorMatrix != null ) c = c * colorMatrix;
+				out = c;
 			} else {
-				var c = tex.get(tuv.xy,type=isDXT1 ? 1 : isDXT5 ? 2 : 0);
+				var c = tex.get(tuv.xy, type = isDXT1 ? 1 : isDXT5 ? 2 : 0);
+				if( hasColorMap )
+					c.rgb += (colorMap.get(tuv.xy) * colorMapMatrix).rgb;
 				if( fog != null ) c.a *= talpha;
-				if( hasAlphaMap ) c.a *= alphaMap.get(tuv.xy,type=isDXT1 ? 1 : isDXT5 ? 2 : 0).b;
+				if( hasAlphaMap ) c.a *= alphaMap.get(alphaMapScroll != null ? tuv + alphaMapScroll : tuv.xy,type=isDXT1 ? 1 : isDXT5 ? 2 : 0).b;
+				if( smoothEdges ) {
+					var screenPos = outProjPos.xyz / outProjPos.w;
+					var tuv = screenPos.xy * [0.5,-0.5] + [0.5,0.5];
+					c.a *= ((depthTexture.get(tuv).rgb.dot([1, 1 / 255, 1 / (255*255)]) - screenPos.z) * smoothFactor).sat();
+				}
 				if( killAlpha ) kill(c.a - killAlphaThreshold);
 				if( hasBlend ) c.rgb = c.rgb * (1 - tblend) + tblend * blendTexture.get(tuv.xy,type=isDXT1 ? 1 : isDXT5 ? 2 : 0).rgb;
 				if( colorAdd != null ) c += colorAdd;
@@ -168,6 +227,7 @@ private class MeshShader extends h3d.impl.Shader {
 					c.rgb *= (1 - shadow) * shadowColor.rgb + shadow.xxx;
 				}
 				if( hasGlow ) c.rgb += glowTexture.get(tuv.xy).rgb * glowAmount;
+				if( writeDistance ) c.rgb *= distance + [0.5,0.5,0];
 				out = c;
 			}
 		}
@@ -445,7 +505,8 @@ class MeshMaterial extends Material {
 	
 	public var texture : Texture;
 	public var glowTexture(get,set) : Texture;
-	public var glowAmount(get,set) : Float;
+	public var glowAmount(get, set) : Float;
+	public var glowColor(get, set) : h3d.Vector;
 
 	public var useMatrixPos : Bool;
 	public var uvScale(get,set) : Null<h3d.Vector>;
@@ -476,6 +537,8 @@ class MeshMaterial extends Material {
 	
 	
 	public var shadowMap(null, set) : ShadowMap;
+	
+	public var volumeDecal(default, set) : DecalInfos;
 	
 	public function new(texture) {
 		mshader = new MeshShader();
@@ -654,14 +717,27 @@ class MeshMaterial extends Material {
 
 	inline function set_glowTexture(t) {
 		mshader.hasGlow = t != null;
+		if( t != null && mshader.glowAmount == null ) mshader.glowAmount = new h3d.Vector(1, 1, 1);
 		return mshader.glowTexture = t;
 	}
 	
 	inline function get_glowAmount() {
-		return mshader.glowAmount;
+		if( mshader.glowAmount == null ) mshader.glowAmount = new h3d.Vector(1, 1, 1);
+		return mshader.glowAmount.x;
 	}
 
 	inline function set_glowAmount(v) {
+		if( mshader.glowAmount == null ) mshader.glowAmount = new h3d.Vector(1, 1, 1);
+		mshader.glowAmount.set(v, v, v);
+		return v;
+	}
+	
+	inline function get_glowColor() {
+		if( mshader.glowAmount == null ) mshader.glowAmount = new h3d.Vector(1, 1, 1);
+		return mshader.glowAmount;
+	}
+
+	inline function set_glowColor(v) {
 		return mshader.glowAmount = v;
 	}
 
@@ -702,6 +778,17 @@ class MeshMaterial extends Material {
 		return v;
 	}
 	
+	inline function set_volumeDecal( d : DecalInfos ) {
+		if( d != null ) {
+			mshader.isDecal = true;
+			mshader.depthTexture = d.depthTexture;
+			mshader.uvScaleRatio = d.uvScaleRatio;
+			mshader.screenToLocal = d.screenToLocal;
+		} else
+			mshader.isDecal = false;
+		return volumeDecal = d;
+	}
+	
 	#if flash
 
 	public var isOutline(get, set) : Bool;
@@ -739,6 +826,18 @@ class MeshMaterial extends Material {
 	
 	inline function set_outlinePower(v) {
 		return mshader.outlinePower = v;
+	}
+	
+	public function setColorMap( texture, ?matrix ) {
+		mshader.hasColorMap = texture != null;
+		mshader.colorMap = texture;
+		mshader.colorMapMatrix = matrix;
+	}
+	
+	public function enableSmoothEdges( factor : Float, depthTexture ) {
+		mshader.smoothEdges = true;
+		mshader.smoothFactor = factor;
+		mshader.depthTexture = depthTexture;
 	}
 	
 	#end

@@ -10,7 +10,6 @@ class FileTree {
 	var currentModule : String;
 	var pos : Position;
 	var loaderType : ComplexType;
-	var ignoredDir : Map<String,Bool>;
 	var ignoredExt : Map<String,Bool>;
 	var pairedExt : Map<String,Array<String>>;
 	var ignoredPairedExt : Map<String,Array<String>>;
@@ -23,10 +22,6 @@ class FileTree {
 		this.path = resolvePath(dir);
 		currentModule = Std.string(Context.getLocalClass());
 		pos = Context.currentPos();
-		ignoredDir = new Map();
-		ignoredDir.set(".svn", true);
-		ignoredDir.set(".git", true);
-		ignoredDir.set(".tmp", true);
 		ignoredExt = new Map();
 		ignoredExt.set("gal", true); // graphics gale source
 		ignoredExt.set("lch", true); // labchirp source
@@ -35,6 +30,7 @@ class FileTree {
 		pairedExt.set("fnt", ["png"]);
 		pairedExt.set("fbx", ["png"]);
 		pairedExt.set("cdb", ["img"]);
+		pairedExt.set("xtra", ["fbx"]);
 		isFlash = Context.defined("flash");
 		isJS = Context.defined("js");
 	}
@@ -73,9 +69,7 @@ class FileTree {
 		for( f in sys.FileSystem.readDirectory(dir) ) {
 			var path = dir + "/" + f;
 			if( sys.FileSystem.isDirectory(path) ) {
-				if( ignoredDir.exists(f.toLowerCase()) )
-					continue;
-				if( f.charCodeAt(0) == "_".code )
+				if( f.charCodeAt(0) == ".".code || f.charCodeAt(0) == "_".code )
 					continue;
 				var sub = embedDir(f, relPath + "/" + f, path);
 				if( sub != null )
@@ -175,7 +169,7 @@ class FileTree {
 		var dict = new Map();
 		for( f in fields ) {
 			if( Lambda.has(f.access,AStatic) ) {
-				dict.set(f.name, "class declaration");
+				dict.set(f.name, { field : null, fget : null, path : "class declaration" });
 				if( f.name == "loader" )
 					loaderType = switch( f.kind ) {
 					case FVar(t, _), FProp(_, _, t, _): t;
@@ -185,7 +179,7 @@ class FileTree {
 		}
 		if( loaderType == null ) {
 			loaderType = macro : hxd.res.Loader;
-			dict.set("loader", "reserved identifier");
+			dict.set("loader", { field : null, fget : null, path : "reserved identifier" });
 			fields.push({
 				name : "loader",
 				access : [APublic, AStatic],
@@ -208,7 +202,7 @@ class FileTree {
 		return fields;
 	}
 	
-	function scanRec( relPath : String, fields : Array<Field>, dict : Map<String,String> ) {
+	function scanRec( relPath : String, fields : Array<Field>, dict : Map<String,{path:String,field:Field,fget:Field}> ) {
 		var dir = this.path + (relPath == "" ? "" : "/" + relPath);
 		// make sure to rescan if one of the directories content has changed (file added or deleted)
 		Context.registerModuleDependency(currentModule, dir);
@@ -219,9 +213,7 @@ class FileTree {
 			var field = null;
 			var ext = null;
 			if( sys.FileSystem.isDirectory(path) ) {
-				if( ignoredDir.exists(f.toLowerCase()) )
-					continue;
-				if( f.charCodeAt(0) == "_".code )
+				if( f.charCodeAt(0) == ".".code || f.charCodeAt(0) == "_".code )
 					continue;
 				field = handleDir(f, relPath.length == 0 ? f : relPath+"/"+f, path);
 			} else {
@@ -249,23 +241,25 @@ class FileTree {
 				f = noExt;
 			}
 			if( field != null ) {
-				var other = dict.get(f);
+				var fname = invalidChars.replace(f, "_");
+				var other = dict.get(fname);
 				if( other != null ) {
-					var pe = pairedExt.get(other.split(".").pop().toLowerCase());
+					var pe = pairedExt.get(other.path.split(".").pop().toLowerCase());
 					if( pe != null && Lambda.has(pe,ext.toLowerCase()) )
 						continue;
-					Context.warning("Resource " + relPath + "/" + f + " is used by both " + relPath + "/" + fileName + " and " + other, pos);
-					continue;
+					if( other.field == null ) {
+						Context.warning("Resource " + relPath + "/" + f + " is used by both " + relPath + "/" + fileName + " and " + other, pos);
+						continue;
+					}
+					fname += "_" + ext.split(".").join("_");
+					var exts = other.path.split("/").pop().split(".");
+					exts.shift();
+					var otherExt = exts.join("_");
+					other.field.name += "_" + otherExt;
+					other.fget.name += "_" + otherExt;
 				}
-				dict.set(f, relPath + "/" + fileName);
-				fields.push({
-					name : f,
-					pos : pos,
-					kind : FProp("get","never",field.t),
-					access : [AStatic, APublic],
-				});
-				fields.push({
-					name : "get_" + f,
+				var fget : Field = {
+					name : "get_" + fname,
 					pos : pos,
 					kind : FFun({
 						args : [],
@@ -275,7 +269,16 @@ class FileTree {
 					}),
 					meta : [ { name:":extern", pos:pos, params:[] } ],
 					access : [AStatic, AInline, APrivate],
-				});
+				};
+				var field : Field = {
+					name : fname,
+					pos : pos,
+					kind : FProp("get","never",field.t),
+					access : [AStatic, APublic],
+				};
+				fields.push(field);
+				fields.push(fget);
+				dict.set(f, { path : relPath + "/" + fileName, field : field, fget : fget });
 			}
 		}
 	}
@@ -283,7 +286,7 @@ class FileTree {
 	function handleDir( dir : String, relPath : String, fullPath : String ) : FileEntry {
 		var ofields = [];
 		var dict = new Map();
-		dict.set("loader", "reserved identifier");
+		dict.set("loader", { path : "reserved identifier", field : null, fget : null });
 		scanRec(relPath, ofields, dict);
 		if( ofields.length == 0 )
 			return null;
@@ -318,9 +321,11 @@ class FileTree {
 		var epath = { expr : EConst(CString(relPath)), pos : pos };
 		switch( ext.toLowerCase() ) {
 		case "jpg", "png":
-			return { e : macro loader.loadTexture($epath), t : macro : hxd.res.Texture };
-		case "fbx", "xbx":
-			return { e : macro loader.loadModel($epath), t : macro : hxd.res.Model };
+			return { e : macro loader.loadImage($epath), t : macro : hxd.res.Image };
+		case "fbx", "xbx", "xtra":
+			return { e : macro loader.loadFbxModel($epath), t : macro : hxd.res.FbxModel };
+		case "awd":
+			return { e : macro loader.loadAwdModel($epath), t : macro : hxd.res.AwdModel };
 		case "ttf":
 			return { e : macro loader.loadFont($epath), t : macro : hxd.res.Font };
 		case "fnt":
