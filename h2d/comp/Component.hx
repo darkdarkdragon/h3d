@@ -94,6 +94,14 @@ class Component extends Sprite {
 		parentComponent = null;
 		super.onAlloc();
 	}
+
+	override function onDelete() {
+        if (parentComponent != null) {
+            parentComponent.components.remove(this);
+        }
+        super.onDelete();
+    }
+
 	
 	public function addCss(cssString) {
 		if( styleSheet == null ) evalStyle();
