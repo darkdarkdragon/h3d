@@ -448,7 +448,7 @@ class Parser {
 			null;
 		};
 	}
-	
+
 	function mapIdent<T:EnumValue>( v : Value, vals : Array<T> ) : T {
 		var i = getIdent(v);
 		if( i == null ) return null;
@@ -544,12 +544,21 @@ class Parser {
 		default: null;
 		};
 	}
-	
+
 	function getImage( v : Value ) {
 		switch( v ) {
 		case VCall("url", [VString(url)]):
-			if( !StringTools.startsWith(url, "data:image/png;base64,") )
-				return null;
+			if( !StringTools.startsWith(url, "data:image/png;base64,") ) {
+				if ( StringTools.startsWith(url, "res:///") ) {
+                    url = url.substr(7);
+                    var image: hxd.res.Image = hxd.Res.loader.load(url).toImage();
+                    trace('css parser get image ' + url);
+                    trace(image);
+                    return image.getPixels();
+                } else {
+                    return null;
+                }
+            }
 			url = url.substr(22);
 			if( StringTools.endsWith(url, "=") ) url = url.substr(0, -1);
 			var bytes = haxe.crypto.Base64.decode(url);
@@ -562,7 +571,13 @@ class Parser {
 	// ---------------------- generic parsing --------------------
 
 	function unexpected( t : Token ) : Dynamic {
-		throw "Unexpected " + Std.string(t);
+        var startpos = pos - 30;
+        if (startpos < 0) startpos = 0;
+        var endpos = pos + 30;
+        if (endpos > css.length) endpos = css.length;
+        var part = css.substring(startpos, endpos);
+        trace(part);
+		throw "Unexpected " + Std.string(t) + " at " + Std.string(pos) + " '" + part + "'";
 		return null;
 	}
 
@@ -654,7 +669,7 @@ class Parser {
 		}
 		return rules;
 	}
-	
+
 	public function parseClasses( css : String ) {
 		this.css = css;
 		pos = 0;
@@ -683,7 +698,7 @@ class Parser {
 			unexpected(readToken());
 		return classes;
 	}
-	
+
 	function updateClass( c : CssClass ) {
 		// map html types to comp ones
 		switch( c.node ) {
@@ -695,7 +710,7 @@ class Parser {
 		}
 		if( c.parent != null ) updateClass(c.parent);
 	}
-	
+
 	function readClass( parent ) : CssClass {
 		var c = new CssClass();
 		c.parent = parent;
