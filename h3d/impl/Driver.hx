@@ -1,22 +1,8 @@
 package h3d.impl;
 
-#if flash
 typedef IndexBuffer = flash.display3D.IndexBuffer3D;
 typedef VertexBuffer = Stage3dDriver.VertexWrapper;
 typedef Texture = flash.display3D.textures.TextureBase;
-#elseif js
-typedef IndexBuffer = js.html.webgl.Buffer;
-typedef VertexBuffer = { b : js.html.webgl.Buffer, stride : Int };
-typedef Texture = js.html.webgl.Texture;
-#elseif cpp
-typedef IndexBuffer = openfl.gl.GLBuffer;
-typedef VertexBuffer = { b : openfl.gl.GLBuffer, stride : Int };
-typedef Texture = openfl.gl.GLTexture;
-#else
-typedef IndexBuffer = Int;
-typedef VertexBuffer = Int;
-typedef Texture = Int;
-#end
 
 class Driver {
 	
@@ -25,6 +11,9 @@ class Driver {
 	}
 	
 	public function dispose() {
+	}
+	
+	public function begin( frame : Int ) {
 	}
 	
 	public function clear( r : Float, g : Float, b : Float, a : Float ) {
@@ -70,7 +59,7 @@ class Driver {
 	public function setRenderZone( x : Int, y : Int, width : Int, height : Int ) {
 	}
 	
-	public function setRenderTarget( tex : Null<Texture>, useDepth : Bool, clearColor : Int ) {
+	public function setRenderTarget( tex : Null<h3d.mat.Texture>, clearColor : Int ) {
 	}
 	
 	public function present() {
@@ -91,7 +80,7 @@ class Driver {
 		return null;
 	}
 
-	public function allocVertex( count : Int, stride : Int ) : VertexBuffer {
+	public function allocVertex( m : ManagedBuffer ) : VertexBuffer {
 		return null;
 	}
 	

@@ -31,8 +31,6 @@ class Tile {
 	}
 	
 	public function getTexture() {
-		if( innerTex == null || innerTex.isDisposed() )
-			return Tools.getCoreObjects().getEmptyTexture();
 		return innerTex;
 	}
 	
@@ -114,7 +112,9 @@ class Tile {
 		return t;
 	}
 	
-	
+	/**
+		Split horizontaly or verticaly the number of given frames
+	**/
 	public function split( frames : Int, vertical = false ) {
 		var tl = [];
 		if( vertical ) {
@@ -127,6 +127,13 @@ class Tile {
 				tl.push(sub(i * stride, 0, stride, height));
 		}
 		return tl;
+	}
+
+	/**
+		Split the tile into a list of tiles of Size x Size pixels.
+	**/
+	public function grid( size : Int, dx = 0, dy = 0 ) {
+		return [for( y in 0...Std.int(height / size) ) for( x in 0...Std.int(width / size) ) sub(x * size, y * size, size, size, dx, dy)];
 	}
 	
 	public function toString() {
@@ -150,14 +157,8 @@ class Tile {
 	}
 	
 
-	static var COLOR_CACHE = new Map<Int,h3d.mat.Texture>();
 	public static function fromColor( color : Int, ?width = 1, ?height = 1, ?allocPos : h3d.impl.AllocPos ) {
-		var t = COLOR_CACHE.get(color);
-		if( t == null || t.isDisposed() ) {
-			t = h3d.mat.Texture.fromColor(color, allocPos);
-			COLOR_CACHE.set(color, t);
-		}
-		var t = new Tile(t, 0, 0, 1, 1);
+		var t = new Tile(h3d.mat.Texture.fromColor(color,allocPos),0,0,1,1);
 		// scale to size
 		t.width = width;
 		t.height = height;
@@ -170,7 +171,7 @@ class Tile {
 			w <<= 1;
 		while( h < bmp.height )
 			h <<= 1;
-		var tex = h3d.Engine.getCurrent().mem.allocTexture(w, h, false, allocPos);
+		var tex = new h3d.mat.Texture(w, h, allocPos);
 		var t = new Tile(tex, 0, 0, bmp.width, bmp.height);
 		t.upload(bmp);
 		return t;
@@ -185,7 +186,7 @@ class Tile {
 			w <<= 1;
 		while( h < bmp.height )
 			h <<= 1;
-		var tex = h3d.Engine.getCurrent().mem.allocTexture(w, h, false, allocPos);
+		var tex = new h3d.mat.Texture(w, h, allocPos);
 		for( y in 0...Std.int(bmp.height / height) ) {
 			var a = [];
 			tl[y] = a;

@@ -6,7 +6,13 @@ class Interactive extends Drawable {
 	public var height : Float;
 	public var cursor(default,set) : hxd.System.Cursor;
 	public var isEllipse : Bool;
-	public var blockEvents : Bool = true;
+	/**
+		Set the default `cancel` mode (see `hxd.Event`), default to false.
+	**/
+	public var cancelEvents : Bool = false;
+	/**
+		Set the default `propagate` mode (see `hxd.Event`), default to false.
+	**/
 	public var propagateEvents : Bool = false;
 	public var backgroundColor : Null<Int>;
 	public var enableRightButton : Bool;
@@ -37,6 +43,16 @@ class Interactive extends Drawable {
 		}
 	}
 	
+	override function calcAbsPos() {
+		super.calcAbsPos();
+		// force a move event if we update the current over interactive
+		if( scene != null && scene.currentOver == this ) {
+			var stage = hxd.Stage.getInstance();
+			var e = new hxd.Event(EMove, stage.mouseX, stage.mouseY);
+			@:privateAccess scene.onEvent(e);
+		}
+	}
+	
 	override function onDelete() {
 		if( scene != null ) {
 			scene.removeEventTarget(this);
@@ -44,6 +60,8 @@ class Interactive extends Drawable {
 				scene.currentOver = null;
 				hxd.System.setCursor(Default);
 			}
+			if( scene.currentFocus == this )
+				scene.currentFocus = null;
 		}
 		super.onDelete();
 	}
@@ -67,7 +85,7 @@ class Interactive extends Drawable {
 			}
 		}
 		if( propagateEvents ) e.propagate = true;
-		if( !blockEvents ) e.cancel = true;
+		if( cancelEvents ) e.cancel = true;
 		switch( e.kind ) {
 		case EMove:
 			onMove(e);

@@ -21,6 +21,12 @@ class Layers extends Sprite {
 	}
 	
 	override function addChildAt( s : Sprite, layer : Int ) {
+		if( s.parent == this ) {
+			var old = s.allocated;
+			s.allocated = false;
+			removeChild(s);
+			s.allocated = old;
+		}
 		// new layer
 		while( layer >= layerCount )
 			layers[layerCount++] = childs.length;
@@ -45,6 +51,25 @@ class Layers extends Sprite {
 		}
 	}
 	
+	public function under( s : Sprite ) {
+		for( i in 0...childs.length )
+			if( childs[i] == s ) {
+				var pos = 0;
+				for( l in layers )
+					if( l > i )
+						break;
+					else
+						pos = l;
+				var p = i;
+				while( p > pos ) {
+					childs[p] = childs[p - 1];
+					p--;
+				}
+				childs[pos] = s;
+				break;
+			}
+	}
+
 	public function over( s : Sprite ) {
 		for( i in 0...childs.length )
 			if( childs[i] == s ) {

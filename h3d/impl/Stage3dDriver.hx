@@ -6,25 +6,24 @@ import h3d.impl.Driver;
 @:allow(h3d.impl.Stage3dDriver)
 class VertexWrapper {
 	var vbuf : flash.display3D.VertexBuffer3D;
-	var stride : Int;
 	var written : Bool;
-	var b : MemoryManager.BigBuffer;
+	var b : ManagedBuffer;
 	
-	function new(vbuf, stride) {
+	function new(vbuf, b) {
 		this.vbuf = vbuf;
-		this.stride = stride;
+		this.b = b;
 	}
-	
+		
 	function finalize( driver : Stage3dDriver ) {
 		if( written ) return;
 		written = true;
 		// fill all the free positions that were unwritten with zeroes (necessary for flash)
-		var f = b.free;
+		var f = @:privateAccess b.freeList;
 		while( f != null ) {
 			if( f.count > 0 ) {
 				var mem : UInt = f.count * b.stride * 4;
 				if( driver.empty.length < mem ) driver.empty.length = mem;
-				driver.uploadVertexBytes(b.vbuf, f.pos, f.count, haxe.io.Bytes.ofData(driver.empty), 0);
+				driver.uploadVertexBytes(@:privateAccess b.vbuf, f.pos, f.count, haxe.io.Bytes.ofData(driver.empty), 0);
 			}
 			f = f.next;
 		}
@@ -45,12 +44,13 @@ class Stage3dDriver extends Driver {
 	var curAttributes : Int;
 	var curTextures : Array<h3d.mat.Texture>;
 	var curSamplerBits : Array<Int>;
-	var inTarget : Texture;
+	var inTarget : h3d.mat.Texture;
 	var antiAlias : Int;
 	var width : Int;
 	var height : Int;
 	var enableDraw : Bool;
 	var capture : { bmp : hxd.BitmapData, callb : Void -> Void };
+	var frame : Int;
 
 	@:allow(h3d.impl.VertexWrapper)
 	var empty : flash.utils.ByteArray;
@@ -66,6 +66,11 @@ class Stage3dDriver extends Driver {
 		return ctx == null ? "None" : (details ? ctx.driverInfo : ctx.driverInfo.split(" ")[0]);
 	}
 	
+	override function begin( frame : Int ) {
+		reset();
+		this.frame = frame;
+	}
+
 	override function reset() {
 		enableDraw = true;
 		curMatBits = -1;
@@ -145,57 +150,67 @@ class Stage3dDriver extends Driver {
 		t.dispose();
 	}
 	
-	override function allocVertex( count : Int, stride : Int ) : VertexBuffer {
+	override function allocVertex( buf : ManagedBuffer ) : VertexBuffer {
 		var v;
 		try {
-			v = ctx.createVertexBuffer(count, stride);
+			v = ctx.createVertexBuffer(buf.size, buf.stride);
 		} catch( e : flash.errors.Error ) {
 			// too many resources / out of memory
 			if( e.errorID == 3691 )
 				return null;
 			throw e;
 		}
-		return new VertexWrapper(v, stride);
+		return new VertexWrapper(v, buf);
 	}
 
 	override function allocIndexes( count : Int ) : IndexBuffer {
 		return ctx.createIndexBuffer(count);
 	}
 	
+	function getMipLevels( t : h3d.mat.Texture ) {
+		if( !t.flags.has(MipMapped) )
+			return 0;
+		var levels = 0;
+		while( t.width > (1 << levels) || t.height > (1 << levels) )
+			levels++;
+		return levels;
+	}
+	
 	override function allocTexture( t : h3d.mat.Texture ) : Texture {
-		var fmt = switch( t.format ) {
-		case Rgba, Atf:
-			flash.display3D.Context3DTextureFormat.BGRA;
-		case AtfCompressed(alpha):
-			alpha ? flash.display3D.Context3DTextureFormat.COMPRESSED_ALPHA : flash.display3D.Context3DTextureFormat.COMPRESSED;
+		var fmt = flash.display3D.Context3DTextureFormat.BGRA;
+		t.lastFrame = frame;
+		if( t.flags.has(TargetDepth) )
+			throw "Unsupported texture flag";
+		try {
+			if( t.flags.has(IsRectangle) ) {
+				if( t.flags.has(Cubic) || t.flags.has(MipMapped) )
+					throw "Not power of two texture is not supported with these flags";
+				#if !flash11_8
+				throw "Support for rectangle texture requires Flash 11.8+ compilation";
+				#else
+				return ctx.createRectangleTexture(t.width, t.height, fmt, t.flags.has(Target));
+				#end
+			}
+			if( t.flags.has(Cubic) )
+				return ctx.createCubeTexture(t.width, fmt, t.flags.has(Target), getMipLevels(t));
+			return ctx.createTexture(t.width, t.height, fmt, t.flags.has(Target), getMipLevels(t));
+		} catch( e : flash.errors.Error ) {
+			if( e.errorID == 3691 )
+				return null;
+			throw e;
 		}
-		var rect = false;
-		if( t.isTarget && !t.isCubic && t.mipLevels == 0 ) {
-			var tw = 1, th = 1;
-			while( tw < t.width ) tw <<= 1;
-			while( th < t.height) th <<= 1;
-			if( tw != t.width || th != t.height )
-				rect = true;
-		}
-		return if( t.isCubic )
-			ctx.createCubeTexture(t.width, fmt, t.isTarget, t.mipLevels);
-		else if( rect ) {
-			#if !flash11_8
-			throw "Support for rectangle texture requires Flash 11.8+ compilation";
-			#else
-			ctx.createRectangleTexture(t.width, t.height, fmt, t.isTarget);
-			#end
-		}
-		else
-			ctx.createTexture(t.width, t.height, fmt, t.isTarget, t.mipLevels);
 	}
 
 	override function uploadTextureBitmap( t : h3d.mat.Texture, bmp : hxd.BitmapData, mipLevel : Int, side : Int ) {
-		if( t.isCubic ) {
+		if( t.flags.has(Cubic) ) {
 			var t = flash.Lib.as(t.t, flash.display3D.textures.CubeTexture);
 			t.uploadFromBitmapData(bmp.toNative(), side, mipLevel);
-		}
-		else {
+		} else if( t.flags.has(IsRectangle) ) {
+			#if flash11_8
+			var t = flash.Lib.as(t.t, flash.display3D.textures.RectangleTexture);
+			t.uploadFromBitmapData(bmp.toNative());
+			#end
+		} else {
 			var t = flash.Lib.as(t.t, flash.display3D.textures.Texture);
 			t.uploadFromBitmapData(bmp.toNative(), mipLevel);
 		}
@@ -204,25 +219,17 @@ class Stage3dDriver extends Driver {
 	override function uploadTexturePixels( t : h3d.mat.Texture, pixels : hxd.Pixels, mipLevel : Int, side : Int ) {
 		pixels.convert(BGRA);
 		var data = pixels.bytes.getData();
-		switch( t.format ) {
-		case Atf, AtfCompressed(_):
-			if( t.isCubic ) {
-				var t = flash.Lib.as(t.t, flash.display3D.textures.CubeTexture);
-				t.uploadCompressedTextureFromByteArray(data, 0);
-			}
-			else {
-				var t = flash.Lib.as(t.t,  flash.display3D.textures.Texture);
-				t.uploadCompressedTextureFromByteArray(data, 0);
-			}
-		default:
-			if( t.isCubic ) {
-				var t = flash.Lib.as(t.t, flash.display3D.textures.CubeTexture);
-				t.uploadFromByteArray(data, 0, side, mipLevel);
-			}
-			else {
-				var t = flash.Lib.as(t.t,  flash.display3D.textures.Texture);
-				t.uploadFromByteArray(data, 0, mipLevel);
-			}
+		if( t.flags.has(Cubic) ) {
+			var t = flash.Lib.as(t.t, flash.display3D.textures.CubeTexture);
+			t.uploadFromByteArray(data, 0, side, mipLevel);
+		} else if( t.flags.has(IsRectangle) ) {
+			#if flash11_8
+			var t = flash.Lib.as(t.t, flash.display3D.textures.RectangleTexture);
+			t.uploadFromByteArray(data, 0);
+			#end
+		} else {
+			var t = flash.Lib.as(t.t,  flash.display3D.textures.Texture);
+			t.uploadFromByteArray(data, 0, mipLevel);
 		}
 	}
 	
@@ -241,7 +248,7 @@ class Stage3dDriver extends Driver {
 	
 	override function uploadVertexBuffer( v : VertexBuffer, startVertex : Int, vertexCount : Int, buf : hxd.FloatBuffer, bufPos : Int ) {
 		var data = buf.getNative();
-		v.vbuf.uploadFromVector( bufPos == 0 ? data : data.slice(bufPos, vertexCount * v.stride + bufPos), startVertex, vertexCount );
+		v.vbuf.uploadFromVector( bufPos == 0 ? data : data.slice(bufPos, vertexCount * v.b.stride + bufPos), startVertex, vertexCount );
 	}
 
 	override function uploadVertexBytes( v : VertexBuffer, startVertex : Int, vertexCount : Int, bytes : haxe.io.Bytes, bufPos : Int ) {
@@ -306,12 +313,17 @@ class Stage3dDriver extends Driver {
 			for( i in 0...s.textures.length ) {
 				var t = s.textures[i];
 				if( t == null || t.isDisposed() )
-					t = h2d.Tile.fromColor(0xFFFF00FF).getTexture();
+					t = h3d.mat.Texture.fromColor(0xFFFF00FF);
+				if( t != null && t.t == null && t.realloc != null ) {
+					t.alloc();
+					t.realloc();
+				}
 				var cur = curTextures[i];
 				if( t != cur ) {
 					ctx.setTextureAt(i, t.t);
 					curTextures[i] = t;
 				}
+				t.lastFrame = frame;
 				// if we have set one of the texture flag manually or if the shader does not configure the texture flags
 				if( !t.hasDefaultFlags() || !s.texHasConfig[s.textureMap[i]] ) {
 					if( cur == null || t.bits != curSamplerBits[i] ) {
@@ -332,8 +344,8 @@ class Stage3dDriver extends Driver {
 			return;
 		curBuffer = v;
 		curMultiBuffer[0] = -1;
-		if( v.stride < curShader.stride )
-			throw "Buffer stride (" + v.stride + ") and shader stride (" + curShader.stride + ") mismatch";
+		if( v.b.stride < curShader.stride )
+			throw "Buffer stride (" + v.b.stride + ") and shader stride (" + curShader.stride + ") mismatch";
 		if( !v.written )
 			v.finalize(this);
 		var pos = 0, offset = 0;
@@ -372,11 +384,11 @@ class Stage3dDriver extends Driver {
 			var b = buffers;
 			while( offset < curShader.stride ) {
 				var size = bits & 7;
-				if( b.b.next != null )
+				if( b.buffer.next != null )
 					throw "Buffer is split";
-				if( !b.b.b.vbuf.written )
-					b.b.b.vbuf.finalize(this);
-				ctx.setVertexBufferAt(pos, b.b.b.vbuf.vbuf, b.offset, FORMAT[size]);
+				var vbuf = @:privateAccess b.buffer.buffer.vbuf;
+				if( !vbuf.written ) vbuf.finalize(this);
+				ctx.setVertexBufferAt(pos, vbuf.vbuf, b.offset, FORMAT[size]);
 				curMultiBuffer[pos] = b.id;
 				offset += size == 0 ? 1 : size;
 				bits >>= 3;
@@ -389,9 +401,24 @@ class Stage3dDriver extends Driver {
 			curBuffer = null;
 		}
 	}
+
+	function debugDraw( ibuf : IndexBuffer, startIndex : Int, ntriangles : Int ) {
+		try {
+			ctx.drawTriangles(ibuf, startIndex, ntriangles);
+		} catch( e : flash.errors.Error ) {
+			// this error should not happen, but sometime does in debug mode (?)
+			if( e.errorID != 3605 )
+				throw e;
+		}
+	}
 	
 	override function draw( ibuf : IndexBuffer, startIndex : Int, ntriangles : Int ) {
-		if( enableDraw ) ctx.drawTriangles(ibuf, startIndex, ntriangles);
+		if( enableDraw ) {
+			if( ctx.enableErrorChecking )
+				debugDraw(ibuf, startIndex, ntriangles);
+			else
+				ctx.drawTriangles(ibuf, startIndex, ntriangles);
+		}
 	}
 
 	override function setRenderZone( x : Int, y : Int, width : Int, height : Int ) {
@@ -417,15 +444,18 @@ class Stage3dDriver extends Driver {
 		}
 	}
 
-	override function setRenderTarget( tex : Null<Texture>, useDepth : Bool, clearColor : Int ) {
-		if( tex == null ) {
+	override function setRenderTarget( t : Null<h3d.mat.Texture>, clearColor : Int ) {
+		if( t == null ) {
 			ctx.setRenderToBackBuffer();
 			inTarget = null;
 		} else {
+			if( t.t == null )
+				t.alloc();
 			if( inTarget != null )
 				throw "Calling setTarget() while already set";
-			ctx.setRenderToTexture(tex, useDepth);
-			inTarget = tex;
+			ctx.setRenderToTexture(t.t, t.flags.has(TargetUseDefaultDepth));
+			inTarget = t;
+			t.lastFrame = frame;
 			reset();
 			ctx.clear( ((clearColor>>16)&0xFF)/255 , ((clearColor>>8)&0xFF)/255, (clearColor&0xFF)/255, ((clearColor>>>24)&0xFF)/255);
 		}

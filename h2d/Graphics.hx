@@ -25,7 +25,7 @@ private class GraphicsContent extends h3d.prim.Primitive {
 	var tmp : hxd.FloatBuffer;
 	var index : hxd.IndexBuffer;
 	
-	var buffers : Array<{ buf : hxd.FloatBuffer, vbuf : h3d.impl.Buffer, idx : hxd.IndexBuffer, ibuf : h3d.impl.Indexes }>;
+	var buffers : Array<{ buf : hxd.FloatBuffer, vbuf : h3d.Buffer, idx : hxd.IndexBuffer, ibuf : h3d.Indexes }>;
 	
 	public function new() {
 		buffers = [];
@@ -58,15 +58,17 @@ private class GraphicsContent extends h3d.prim.Primitive {
 	}
 	
 	override function alloc( engine : h3d.Engine ) {
-		buffer = engine.mem.allocVector(tmp, 8, 0);
-		indexes = engine.mem.allocIndex(index);
+		if (index.length <= 0) return ;
+		buffer = h3d.Buffer.ofFloats(tmp, 8);
+		indexes = h3d.Indexes.alloc(index);
 		for( b in buffers ) {
-			if( b.vbuf == null || b.vbuf.isDisposed() ) b.vbuf = engine.mem.allocVector(b.buf, 8, 0);
-			if( b.ibuf == null || b.ibuf.isDisposed() ) b.ibuf = engine.mem.allocIndex(b.idx);
+			if( b.vbuf == null || b.vbuf.isDisposed() ) b.vbuf = h3d.Buffer.ofFloats(b.buf, 8);
+			if( b.ibuf == null || b.ibuf.isDisposed() ) b.ibuf = h3d.Indexes.alloc(b.idx);
 		}
 	}
 	
 	override function render( engine : h3d.Engine ) {
+		if (index.length <= 0) return ;
 		if( buffer == null || buffer.isDisposed() ) alloc(engine);
 		for( b in buffers )
 			engine.renderIndexed(b.vbuf, b.ibuf);
@@ -264,7 +266,7 @@ class Graphics extends Drawable {
 		if( nsegments == 0 )
 			nsegments = Math.ceil(ray * 3.14 * 2 / 4);
 		if( nsegments < 3 ) nsegments = 3;
-		var angle = Math.PI * 2 / (nsegments + 1);
+		var angle = Math.PI * 2 / nsegments;
 		for( i in 0...nsegments ) {
 			var a = i * angle;
 			addPoint(cx + Math.cos(a) * ray, cy + Math.sin(a) * ray);
