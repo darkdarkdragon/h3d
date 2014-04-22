@@ -78,13 +78,6 @@ class Component extends Sprite {
 		return v;
 	}
 	
-	override function onDelete() {
-		if( parentComponent != null ) {
-			parentComponent.components.remove(this);
-			parentComponent = null;
-		}
-		super.onDelete();
-	}
 		
 	override function onAlloc() {
 		// lookup our parent component
