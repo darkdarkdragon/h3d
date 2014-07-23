@@ -2,11 +2,12 @@ package h2d.css;
 import h2d.css.Defs;
 
 class Style {
-	
+
 	public var fontName : Null<String>;
 	public var fontSize : Null<Float>;
 	public var color : Null<Int>;
 	public var backgroundColor : Null<FillStyle>;
+	public var borderRadius : Null<Float>;
 	public var borderSize : Null<Float>;
 	public var borderColor : Null<FillStyle>;
 	public var paddingTop : Null<Float>;
@@ -41,15 +42,16 @@ class Style {
 	public var iconTop : Null<Float>;
 	public var textAlign : Null<TextAlign>;
 	public var display : Null<Bool>;
-	
+
 	public function new() {
 	}
-	
+
 	public function apply( s : Style ) {
 		if( s.fontName != null ) fontName = s.fontName;
 		if( s.fontSize != null ) fontSize = s.fontSize;
 		if( s.color != null ) color = s.color;
 		if( s.backgroundColor != null ) backgroundColor = s.backgroundColor;
+		if( s.borderRadius != null ) borderRadius = s.borderRadius;
 		if( s.borderSize != null ) borderSize = s.borderSize;
 		if( s.borderColor != null ) borderColor = s.borderColor;
 		if( s.paddingLeft != null ) paddingLeft = s.paddingLeft;
@@ -91,7 +93,7 @@ class Style {
 		if( s.textAlign != null ) textAlign = s.textAlign;
 		if( s.display != null ) display = s.display;
 	}
-	
+
 	public function padding( v : Float ) {
 		this.paddingTop = v;
 		this.paddingLeft = v;
@@ -105,7 +107,7 @@ class Style {
 		this.marginRight = v;
 		this.marginBottom = v;
 	}
-	
+
 	public function toString() {
 		var fields = [];
 		for( f in Type.getInstanceFields(Style) ) {
@@ -118,5 +120,5 @@ class Style {
 		}
 		return "{" + fields.join(", ") + "}";
 	}
-		
+
 }
