@@ -17,7 +17,9 @@ class Charset {
 	**/
 	public static var LATIN1 = "¡¢£¤¥¦§¨©ª«¬-®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ";
 	
-	public static var DEFAULT_CHARS = ASCII + LATIN1;
+	public static var CYRILLIC = "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя";
+
+	public static var DEFAULT_CHARS = ASCII + LATIN1 + CYRILLIC;
 	
 	var map : Map<Int,Int>;
 
