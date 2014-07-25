@@ -189,7 +189,8 @@ class Component extends Sprite {
 	}
 
 	function getFont() {
-		return Context.getFont(style.fontName, Std.int(style.fontSize));
+        var bold = if (style.fontWeight != null) switch(style.fontWeight) { case Bold: true; default: false; } else false;
+		return Context.getFont(style.fontName, Std.int(style.fontSize), bold );
 	}
 
 	function evalStyle() {

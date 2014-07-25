@@ -3,6 +3,7 @@ package hxd.res;
 typedef FontBuildOptions = {
 	?antiAliasing : Bool,
 	?chars : String,
+    ?bold: Bool
 };
 
 /**
@@ -17,14 +18,15 @@ class FontBuilder {
 	var font : h2d.Font;
 	var options : FontBuildOptions;
 	var innerTex : h3d.mat.Texture;
-	
+
 	function new(name, size, opt) {
 		this.font = new h2d.Font(name, size);
 		this.options = opt == null ? { } : opt;
 		if( options.antiAliasing == null ) options.antiAliasing = true;
 		if( options.chars == null ) options.chars = hxd.Charset.DEFAULT_CHARS;
+		if( options.bold == null ) options.bold = false;
 	}
-	
+
 	#if flash
 
 	function build() {
@@ -33,13 +35,17 @@ class FontBuilder {
 		var fmt = tf.defaultTextFormat;
 		fmt.font = font.name;
 		fmt.size = font.size;
+        fmt.bold = options.bold;
 		fmt.color = 0xFFFFFF;
 		tf.defaultTextFormat = fmt;
-		for( f in flash.text.Font.enumerateFonts() )
+        trace('looking for ${font.name}');
+		for ( f in flash.text.Font.enumerateFonts() ) {
+            trace('${f.fontName} ${f.fontStyle}');
 			if( f.fontName == font.name ) {
 				tf.embedFonts = true;
 				break;
 			}
+        }
 		if( options.antiAliasing ) {
 			tf.gridFitType = flash.text.GridFitType.PIXEL;
 			tf.antiAliasType = flash.text.AntiAliasType.ADVANCED;
@@ -100,10 +106,10 @@ class FontBuilder {
 				x += w + 1;
 			}
 		} while( bmp == null );
-		
+
 		var pixels = hxd.BitmapData.fromNative(bmp).getPixels();
 		bmp.dispose();
-		
+
 		// let's remove alpha premult (all pixels should be white with alpha)
 		pixels.convert(BGRA);
 		var r = hxd.impl.Memory.select(pixels.bytes);
@@ -118,7 +124,7 @@ class FontBuilder {
 			}
 		}
 		r.end();
-		
+
 		if( innerTex == null ) {
 			innerTex = h3d.mat.Texture.fromPixels(pixels);
 			font.tile = h2d.Tile.fromTexture(innerTex);
@@ -130,7 +136,7 @@ class FontBuilder {
 		pixels.dispose();
 		return font;
 	}
-	
+
 	#elseif js
 
 	function getTextHeight(text: String): Int {
@@ -207,7 +213,7 @@ class FontBuilder {
 			}
 		} while ( bmp == null );
         var rbmp = hxd.BitmapData.fromNative( ctx.getImageData(0, 0, width, height) );
-		
+
 		if( innerTex == null ) {
 			innerTex = h3d.mat.Texture.fromBitmap( rbmp );
 			font.tile = h2d.Tile.fromTexture(innerTex);
@@ -221,16 +227,17 @@ class FontBuilder {
 	}
 
     #else
-	
+
 	function build() {
 		throw "Font building not supported on this platform";
 		return null;
 	}
-	
+
 	#end
-	
+
 	public static function getFont( name : String, size : Int, ?options : FontBuildOptions ) {
 		var key = name + "#" + size;
+        if (options.bold != null && options.bold) key += "B";
 		var f = FONTS.get(key);
 		if( f != null && f.tile.innerTex != null )
 			return f;
@@ -238,7 +245,7 @@ class FontBuilder {
 		FONTS.set(key, f);
 		return f;
 	}
-	
+
 	public static function dispose() {
 		for( f in FONTS )
 			f.dispose();

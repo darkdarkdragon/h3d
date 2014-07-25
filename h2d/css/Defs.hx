@@ -34,6 +34,11 @@ enum TextAlign {
 	Center;
 }
 
+enum FontWeight {
+    Normal;
+    Bold;
+}
+
 class CssClass {
 	public var parent : Null<CssClass>;
 	public var node : Null<String>;

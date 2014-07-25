@@ -5,6 +5,7 @@ class Style {
 
 	public var fontName : Null<String>;
 	public var fontSize : Null<Float>;
+	public var fontWeight : Null<FontWeight>;
 	public var color : Null<Int>;
 	public var backgroundColor : Null<FillStyle>;
 	public var borderRadius : Null<Float>;
@@ -49,6 +50,7 @@ class Style {
 	public function apply( s : Style ) {
 		if( s.fontName != null ) fontName = s.fontName;
 		if( s.fontSize != null ) fontSize = s.fontSize;
+		if( s.fontWeight != null ) fontWeight = s.fontWeight;
 		if( s.color != null ) color = s.color;
 		if( s.backgroundColor != null ) backgroundColor = s.backgroundColor;
 		if( s.borderRadius != null ) borderRadius = s.borderRadius;

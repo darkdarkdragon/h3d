@@ -161,6 +161,16 @@ class Parser {
 				}
 				return true;
 			}
+		case "font-weight":
+			switch( getIdent(v) ) {
+			case "normal":
+				s.fontWeight = Normal;
+				return true;
+			case "bold":
+				s.fontWeight = Bold;
+				return true;
+			default:
+			}
 		case "color":
 			var c = getCol(v);
 			if( c != null ) {
