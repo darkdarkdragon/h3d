@@ -124,6 +124,40 @@ private class TileLayerContent extends h3d.prim.Primitive {
 		insertColor(cbr);
 	}
 
+    public inline function fillArc( x : Float, y : Float, ray : Float, c : Int, start: Float, end: Float) {
+        if (end <= start) return;
+        var arcLength = end - start;
+        var nsegments = Math.ceil(ray * 3.14 * 2 / 4);
+		if ( nsegments < 4 ) nsegments = 4;
+		var angle = arcLength / nsegments;
+        var prevX = Math.NEGATIVE_INFINITY;
+        var prevY = Math.NEGATIVE_INFINITY;
+        var _x = 0.;
+        var _y = 0.;
+        var i = 0;
+		while ( i < nsegments ) {
+			var a = start + i * angle;
+            _x = x + Math.cos(a) * ray;
+            _y = y + Math.sin(a) * ray;
+            if (prevX != Math.NEGATIVE_INFINITY) {
+                addPoint(x, y, c);
+                addPoint(_x, _y, c);
+                addPoint(prevX, prevY, c);
+                addPoint(prevX, prevY, c);
+            }
+            prevX = _x;
+            prevY = _y;
+            i += 1;
+		}
+        var a = end;
+        _x = x + Math.cos(a) * ray;
+        _y = y + Math.sin(a) * ray;
+        addPoint(x, y, c);
+        addPoint(_x, _y, c);
+        addPoint(prevX, prevY, c);
+        addPoint(prevX, prevY, c);
+    }
+
     public inline function fillCircle( x : Float, y : Float, radius : Float, c : Int) {
         var nsegments = Math.ceil(radius * 3.14 * 2 / 2);
         if( nsegments < 3 ) nsegments = 3;
