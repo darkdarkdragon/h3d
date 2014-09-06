@@ -3,15 +3,16 @@ package h3d.scene;
 class Joint extends Object {
 	public var skin : Skin;
 	public var index : Int;
-	
-	public function new(skin, index) {
+
+	public function new(skin, j : h3d.anim.Skin.Joint ) {
 		super(null);
+		name = j.name;
 		this.skin = skin;
 		// fake parent
 		this.parent = skin;
-		this.index = index;
+		this.index = j.index;
 	}
-	
+
 	@:access(h3d.scene.Skin)
 	override function syncPos() {
 		// check if one of our parents has changed
@@ -44,8 +45,8 @@ class Joint extends Object {
 	}
 }
 
-class Skin extends Mesh {
-	
+class Skin extends MultiMaterial {
+
 	var skinData : h3d.anim.Skin;
 	var currentRelPose : Array<h3d.Matrix>;
 	var currentAbsPose : Array<h3d.Matrix>;
@@ -54,42 +55,43 @@ class Skin extends Mesh {
 	var jointsUpdated : Bool;
 	var jointsAbsPosInv : h3d.Matrix;
 	var paletteChanged : Bool;
+	var skinShader : h3d.shader.Skin;
 
 	public var showJoints : Bool;
 	public var syncIfHidden : Bool = true;
-	
+
 	public function new(s, ?mat, ?parent) {
 		super(null, mat, parent);
 		if( s != null )
 			setSkinData(s);
 	}
-	
+
 	override function clone( ?o : Object ) {
-		var s = o == null ? new Skin(null,material) : cast o;
+		var s = o == null ? new Skin(null,materials.copy()) : cast o;
 		super.clone(s);
 		s.setSkinData(skinData);
 		s.currentRelPose = currentRelPose.copy(); // copy current pose
 		return s;
 	}
-	
-	
-	override function getBounds( ?b : h3d.col.Bounds ) {
-		b = super.getBounds(b);
+
+
+	override function getBounds( ?b : h3d.col.Bounds, rec = false ) {
+		b = super.getBounds(b, rec);
 		var tmp = primitive.getBounds().clone();
 		var b0 = skinData.allJoints[0];
 		// not sure if that's the good joint
-		if( b0 != null && b0.defMat != null && b0.parent == null ) {
+		if( b0 != null && b0.parent == null ) {
 			var mtmp = absPos.clone();
 			var r = currentRelPose[b0.index];
 			if( r != null )
 				mtmp.multiply3x4(r, mtmp);
 			else
 				mtmp.multiply3x4(b0.defMat, mtmp);
-			mtmp.multiply3x4(b0.transPos, mtmp);
+			if( b0.transPos != null )
+				mtmp.multiply3x4(b0.transPos, mtmp);
 			tmp.transform3x4(mtmp);
-		} else {
+		} else
 			tmp.transform3x4(absPos);
-		}
 		b.add(tmp);
 		return b;
 	}
@@ -101,22 +103,27 @@ class Skin extends Mesh {
 		if( skinData != null ) {
 			var j = skinData.namedJoints.get(name);
 			if( j != null )
-				return new Joint(this, j.index);
+				return new Joint(this, j);
 		}
 		return null;
 	}
-	
+
 	override function calcAbsPos() {
 		super.calcAbsPos();
 		// if we update our absolute position, rebuild the matrixes
 		jointsUpdated = true;
 	}
-	
+
 	public function setSkinData( s ) {
 		skinData = s;
 		jointsUpdated = true;
 		primitive = s.primitive;
-		material.hasSkin = true;
+		skinShader = new h3d.shader.Skin();
+		for( m in materials )
+			if( m != null ) {
+				m.mainPass.addShader(skinShader);
+				if( skinData.splitJoints != null ) m.mainPass.dynamicParameters = true;
+			}
 		currentRelPose = [];
 		currentAbsPose = [];
 		currentPalette = [];
@@ -142,10 +149,7 @@ class Skin extends Mesh {
 				var id = j.index;
 				var m = currentAbsPose[id];
 				var r = currentRelPose[id];
-				if( r == null ) {
-					var bid = j.bindIndex;
-					if( bid >= 0 ) r = j.defMat else continue;
-				}
+				if( r == null ) r = j.defMat;
 				if( j.parent == null )
 					m.multiply3x4(r, absPos);
 				else
@@ -154,44 +158,42 @@ class Skin extends Mesh {
 				if( bid >= 0 )
 					currentPalette[bid].multiply3x4(j.transPos, m);
 			}
-			paletteChanged = true;
+			skinShader.bonesMatrixes = currentPalette;
 			if( jointsAbsPosInv != null ) jointsAbsPosInv._44 = 0; // mark as invalid
 			jointsUpdated = false;
 		} else
 			super.sync(ctx);
 	}
-	
+
 	override function draw( ctx : RenderContext ) {
 		if( splitPalette == null ) {
-			if( paletteChanged ) {
-				paletteChanged = false;
-				material.skinMatrixes = currentPalette;
-			}
 			super.draw(ctx);
 		} else {
 			for( i in 0...splitPalette.length ) {
-				material.skinMatrixes = splitPalette[i];
+				skinShader.bonesMatrixes = splitPalette[i];
 				primitive.selectMaterial(i);
-				super.draw(ctx);
+				ctx.uploadParams();
+				primitive.render(ctx.engine);
 			}
 		}
 		if( showJoints )
-			ctx.addPass(drawJoints);
+			throw "TODO"; //ctx.addPass(drawJoints);
 	}
-	
+
 	function drawJoints( ctx : RenderContext ) {
+		/*
 		for( j in skinData.allJoints ) {
 			var m = currentAbsPose[j.index];
 			var mp = j.parent == null ? absPos : currentAbsPose[j.parent.index];
 			ctx.engine.line(mp._41, mp._42, mp._43, m._41, m._42, m._43, j.parent == null ? 0xFF0000FF : 0xFFFFFF00);
-			
+
 			var dz = new h3d.Vector(0, 0.01, 0);
 			dz.transform(m);
 			ctx.engine.line(m._41, m._42, m._43, dz.x, dz.y, dz.z, 0xFF00FF00);
-			
+
 			ctx.engine.point(m._41, m._42, m._43, j.bindIndex < 0 ? 0xFF0000FF : 0xFFFF0000);
 		}
+		*/
 	}
-	
-	
+
 }

@@ -3,40 +3,44 @@ package h3d;
 // use left-handed coordinate system, more suitable for 2D games X=0,Y=0 at screen top-left and Z towards user
 
 class Camera {
-	
+
 	public var zoom : Float;
-	
+
 	/**
 		The screenRatio represents the W/H screen ratio.
 	 **/
 	public var screenRatio : Float;
-	
+
 	/**
-		The horizontal FieldOfView, in degrees.
+		The vertical FieldOfView, in degrees.
 	**/
-	public var fovX : Float;
+	public var fovY : Float;
 	public var zNear : Float;
 	public var zFar : Float;
-	
+
 	/**
 		Set orthographic bounds.
 	**/
 	public var orthoBounds : h3d.col.Bounds;
-	
+
 	public var rightHanded : Bool;
-	
+
 	public var mproj : Matrix;
 	public var mcam : Matrix;
 	public var m : Matrix;
-	
+
 	public var pos : Vector;
 	public var up : Vector;
 	public var target : Vector;
+
+	public var viewX : Float = 0.;
+	public var viewY : Float = 0.;
+
 	var minv : Matrix;
 	var needInv : Bool;
 
-	public function new( fovX = 60., zoom = 1., screenRatio = 1.333333, zNear = 0.02, zFar = 4000., rightHanded = false ) {
-		this.fovX = fovX;
+	public function new( fovY = 60., zoom = 1., screenRatio = 1.333333, zNear = 0.02, zFar = 4000., rightHanded = false ) {
+		this.fovY = fovY;
 		this.zoom = zoom;
 		this.screenRatio = screenRatio;
 		this.zNear = zNear;
@@ -50,16 +54,9 @@ class Camera {
 		mproj = new Matrix();
 		update();
 	}
-	
-	/**
-		Update the fovX value based on the requested fovY value (in degrees) and current screenRatio.
-	**/
-	public function setFovY( value : Float ) {
-		fovX = Math.atan( Math.tan(value * Math.PI / 180) / screenRatio ) * 180 / Math.PI;
-	}
-	
+
 	public function clone() {
-		var c = new Camera(fovX, zoom, screenRatio, zNear, zFar, rightHanded);
+		var c = new Camera(fovY, zoom, screenRatio, zNear, zFar, rightHanded);
 		c.pos = pos.clone();
 		c.up = up.clone();
 		c.target = target.clone();
@@ -91,20 +88,20 @@ class Camera {
 		p.project(getInverseViewProj());
 		return p;
 	}
-	
+
 	public function update() {
 		makeCameraMatrix(mcam);
 		makeFrustumMatrix(mproj);
 		m.multiply(mcam, mproj);
 		needInv = true;
 	}
-	
+
 	public function lostUp() {
 		var p2 = pos.clone();
 		p2.normalize();
 		return Math.abs(p2.dot3(up)) > 0.999;
 	}
-	
+
 	public function movePosAxis( dx : Float, dy : Float, dz = 0. ) {
 		var p = new Vector(dx, dy, dz);
 		p.project(mcam);
@@ -120,10 +117,11 @@ class Camera {
 		target.y += p.y;
 		target.z += p.z;
 	}
-	
+
 	function makeCameraMatrix( m : Matrix ) {
 		// in leftHanded the z axis is positive else it's negative
 		// this way we make sure that our [ax,ay,-az] matrix follow the same handness as our world
+		// We build a transposed version of Matrix.lookAt
 		var az = rightHanded ? pos.sub(target) : target.sub(pos);
 		az.normalize();
 		var ax = up.cross(az);
@@ -151,26 +149,26 @@ class Camera {
 		m._43 = -az.dot3(pos);
 		m._44 = 1;
 	}
-	
+
 	function makeFrustumMatrix( m : Matrix ) {
 		m.zero();
-		
+
 		// this will take into account the aspect ratio and normalize the z value into [0,1] once it's been divided by w
 		// Matrixes have to solve the following formulaes :
 		//
 		// transform P by Mproj and divide everything by
 		//    [x,y,-zNear,1] => [sx/zNear, sy/zNear, 0, 1]
 		//    [x,y,-zFar,1] => [sx/zFar, sy/zFar, 1, 1]
-		
+
 		// we apply the screen ratio to the height in order to have the fov being a horizontal FOV. This way we don't have to change the FOV when the screen is enlarged
-		
+
 		var bounds = orthoBounds;
 		if( bounds != null ) {
-			
+
 			var w = 1 / (bounds.xMax - bounds.xMin);
 			var h = 1 / (bounds.yMax - bounds.yMin);
 			var d = 1 / (bounds.zMax - bounds.zMin);
-			
+
 			m._11 = 2 * w;
 			m._22 = 2 * h;
 			m._33 = d;
@@ -178,23 +176,34 @@ class Camera {
 			m._42 = -(bounds.yMin + bounds.yMax) * h;
 			m._43 = -bounds.zMin * d;
 			m._44 = 1;
-			
+
 		} else {
-		
-			var scale = zoom / Math.tan(fovX * Math.PI / 360.0);
+			var degToRad = (Math.PI / 180);
+			var halfFovX = Math.atan( Math.tan(fovY * 0.5 * degToRad) * screenRatio );
+			var fovX = halfFovX * 2 / degToRad;
+			var scale = zoom / Math.tan(halfFovX);
 			m._11 = scale;
 			m._22 = scale * screenRatio;
 			m._33 = zFar / (zFar - zNear);
 			m._34 = 1;
 			m._43 = -(zNear * zFar) / (zFar - zNear);
-			
 		}
-		
+
+		m._11 += viewX * m._14;
+		m._21 += viewX * m._24;
+		m._31 += viewX * m._34;
+		m._41 += viewX * m._44;
+
+		m._12 += viewY * m._14;
+		m._22 += viewY * m._24;
+		m._32 += viewY * m._34;
+		m._42 += viewY * m._44;
+
 		// our z is negative in that case
 		if( rightHanded ) {
 			m._33 *= -1;
 			m._34 *= -1;
 		}
 	}
-		
+
 }

@@ -6,13 +6,19 @@ class Interactive extends Drawable {
 	public var height : Float;
 	public var cursor(default,set) : hxd.System.Cursor;
 	public var isEllipse : Bool;
-	public var blockEvents : Bool = true;
+	/**
+		Set the default `cancel` mode (see `hxd.Event`), default to false.
+	**/
+	public var cancelEvents : Bool = false;
+	/**
+		Set the default `propagate` mode (see `hxd.Event`), default to false.
+	**/
 	public var propagateEvents : Bool = false;
 	public var backgroundColor : Null<Int>;
 	public var enableRightButton : Bool;
 	var scene : Scene;
 	var isMouseDown : Int;
-	
+
 	public function new(width, height, ?parent) {
 		super(parent);
 		this.width = width;
@@ -25,18 +31,33 @@ class Interactive extends Drawable {
 		if( scene != null ) scene.addEventTarget(this);
 		super.onAlloc();
 	}
-	
+
 	override function draw( ctx : RenderContext ) {
-		if( backgroundColor != null ) drawTile(ctx.engine,h2d.Tile.fromColor(backgroundColor,Std.int(width),Std.int(height)));
+		if( backgroundColor != null ) emitTile(ctx, h2d.Tile.fromColor(backgroundColor, Std.int(width), Std.int(height), (backgroundColor>>>24)/255 ));
 	}
-	
+
+	override function getBoundsRec( relativeTo, out ) {
+		super.getBoundsRec(relativeTo, out);
+		if( backgroundColor != null ) addBounds(relativeTo, out, 0, 0, Std.int(width), Std.int(height));
+	}
+
 	override function onParentChanged() {
 		if( scene != null ) {
 			scene.removeEventTarget(this);
 			scene.addEventTarget(this);
 		}
 	}
-	
+
+	override function calcAbsPos() {
+		super.calcAbsPos();
+		// force a move event if we update the current over interactive
+		if( scene != null && scene.currentOver == this ) {
+			var stage = hxd.Stage.getInstance();
+			var e = new hxd.Event(EMove, stage.mouseX, stage.mouseY);
+			@:privateAccess scene.onEvent(e);
+		}
+	}
+
 	override function onDelete() {
 		if( scene != null ) {
 			scene.removeEventTarget(this);
@@ -44,6 +65,8 @@ class Interactive extends Drawable {
 				scene.currentOver = null;
 				hxd.System.setCursor(Default);
 			}
+			if( scene.currentFocus == this )
+				scene.currentFocus = null;
 		}
 		super.onDelete();
 	}
@@ -54,7 +77,7 @@ class Interactive extends Drawable {
 		default: true;
 		}
 	}
-	
+
 	@:allow(h2d.Scene)
 	function handleEvent( e : hxd.Event ) {
 		if( isEllipse && checkBounds(e) ) {
@@ -66,8 +89,8 @@ class Interactive extends Drawable {
 				return;
 			}
 		}
-		e.propagate = propagateEvents;
-		if( !blockEvents ) e.cancel = true;
+		if( propagateEvents ) e.propagate = true;
+		if( cancelEvents ) e.cancel = true;
 		switch( e.kind ) {
 		case EMove:
 			onMove(e);
@@ -104,40 +127,40 @@ class Interactive extends Drawable {
 			onKeyDown(e);
 		}
 	}
-	
+
 	function set_cursor(c) {
 		this.cursor = c;
 		if( scene != null && scene.currentOver == this )
 			hxd.System.setCursor(cursor);
 		return c;
 	}
-	
+
 	function eventToLocal( e : hxd.Event ) {
 		// convert global event to our local space
 		var x = e.relX, y = e.relY;
 		var rx = x * scene.matA + y * scene.matB + scene.absX;
 		var ry = x * scene.matC + y * scene.matD + scene.absY;
 		var r = scene.height / scene.width;
-		
+
 		var i = this;
-		
+
 		var dx = rx - i.absX;
 		var dy = ry - i.absY;
-		
+
 		var w1 = i.width * i.matA * r;
 		var h1 = i.width * i.matC;
 		var ky = h1 * dx - w1 * dy;
-		
+
 		var w2 = i.height * i.matB * r;
 		var h2 = i.height * i.matD;
 		var kx = w2 * dy - h2 * dx;
-		
+
 		var max = h1 * w2 - w1 * h2;
-		
+
 		e.relX = (kx * r / max) * i.width;
 		e.relY = (ky / max) * i.height;
 	}
-	
+
 	public function startDrag(callb,?onCancel) {
 		scene.startDrag(function(event) {
 			var x = event.relX, y = event.relY;
@@ -147,11 +170,11 @@ class Interactive extends Drawable {
 			event.relY = y;
 		},onCancel);
 	}
-	
+
 	public function stopDrag() {
 		scene.stopDrag();
 	}
-	
+
 	public function focus() {
 		if( scene == null )
 			return;
@@ -166,7 +189,7 @@ class Interactive extends Drawable {
 		ev.kind = EFocus;
 		handleEvent(ev);
 	}
-	
+
 	public function blur() {
 		if( scene == null )
 			return;
@@ -176,17 +199,17 @@ class Interactive extends Drawable {
 			scene.currentFocus.handleEvent(ev);
 		}
 	}
-	
+
 	public function hasFocus() {
 		return scene != null && scene.currentFocus == this;
 	}
-	
+
 	public dynamic function onOver( e : hxd.Event ) {
 	}
 
 	public dynamic function onOut( e : hxd.Event ) {
 	}
-	
+
 	public dynamic function onPush( e : hxd.Event ) {
 	}
 
@@ -195,7 +218,7 @@ class Interactive extends Drawable {
 
 	public dynamic function onClick( e : hxd.Event ) {
 	}
-	
+
 	public dynamic function onMove( e : hxd.Event ) {
 	}
 
@@ -204,7 +227,7 @@ class Interactive extends Drawable {
 
 	public dynamic function onFocus( e : hxd.Event ) {
 	}
-	
+
 	public dynamic function onFocusLost( e : hxd.Event ) {
 	}
 
@@ -213,5 +236,5 @@ class Interactive extends Drawable {
 
 	public dynamic function onKeyDown( e : hxd.Event ) {
 	}
-	
+
 }

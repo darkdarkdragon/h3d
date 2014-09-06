@@ -2,7 +2,7 @@ package h3d;
 import hxd.Math;
 
 class Matrix {
-	
+
 	static var tmp = new Matrix();
 
 	public var _11 : Float;
@@ -104,7 +104,7 @@ class Matrix {
 		_34 = 0.;
 		_41 = 0.; _42 = 0.; _43 = 0.; _44 = 1.;
 	}
-	
+
 	public function initRotate( x : Float, y : Float, z : Float ) {
 		var cx = Math.cos(x);
 		var sx = Math.sin(x);
@@ -131,7 +131,7 @@ class Matrix {
 		_43 = 0;
 		_44 = 1;
 	}
-	
+
 	public function translate( x = 0., y = 0., z = 0. ) {
 		_11 += x * _14;
 		_12 += y * _14;
@@ -146,7 +146,7 @@ class Matrix {
 		_42 += y * _44;
 		_43 += z * _44;
 	}
-	
+
 	public function scale( x = 1., y = 1., z = 1. ) {
 		_11 *= x;
 		_21 *= x;
@@ -167,17 +167,23 @@ class Matrix {
 		tmp.initRotate(x,y,z);
 		multiply(this, tmp);
 	}
-	
+
 	public function rotateAxis( axis, angle ) {
 		var tmp = tmp;
 		tmp.initRotateAxis(axis, angle);
 		multiply(this, tmp);
 	}
-	
-	public inline function add( m : Matrix ) {
-		multiply(this, m);
+
+	public inline function pos( ?v : Vector ) {
+		if( v == null )
+			return new Vector( _41, _42 , _43 , _44 );
+		v.x = _41;
+		v.y = _42;
+		v.z = _43;
+		v.w = _44;
+		return v;
 	}
-	
+
 	public function prependTranslate( x = 0., y = 0., z = 0. ) {
 		var vx = _11 * x + _21 * y + _31 * z + _41;
 		var vy = _12 * x + _22 * y + _32 * z + _42;
@@ -194,7 +200,7 @@ class Matrix {
 		tmp.initRotate(x,y,z);
 		multiply(tmp, this);
 	}
-	
+
 	public function prependRotateAxis( axis, angle ) {
 		var tmp = tmp;
 		tmp.initRotateAxis(axis, angle);
@@ -206,7 +212,7 @@ class Matrix {
 		tmp.initScale(sx,sy,sz);
 		multiply(tmp, this);
 	}
-	
+
 	public function multiply3x4( a : Matrix, b : Matrix ) {
 		var m11 = a._11; var m12 = a._12; var m13 = a._13;
 		var m21 = a._21; var m22 = a._22; var m23 = a._23;
@@ -269,6 +275,25 @@ class Matrix {
 		_44 = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
 	}
 
+	public function multiplyValue( v : Float ) {
+		_11 *= v;
+		_12 *= v;
+		_13 *= v;
+		_14 *= v;
+		_21 *= v;
+		_22 *= v;
+		_23 *= v;
+		_24 *= v;
+		_31 *= v;
+		_32 *= v;
+		_33 *= v;
+		_34 *= v;
+		_41 *= v;
+		_42 *= v;
+		_43 *= v;
+		_44 *= v;
+	}
+
 	public inline function invert() {
 		inverse(this);
 	}
@@ -306,7 +331,7 @@ class Matrix {
 		_31 *= invDet; _32 *= invDet; _33 *= invDet;
 		_41 *= invDet; _42 *= invDet; _43 *= invDet;
 	}
-	
+
 	public function inverse( m : Matrix ) {
 		var m11 = m._11; var m12 = m._12; var m13 = m._13; var m14 = m._14;
 		var m21 = m._21; var m22 = m._22; var m23 = m._23; var m24 = m._24;
@@ -380,18 +405,18 @@ class Matrix {
 		_31 = m._31; _32 = m._32; _33 = m._33; _34 = m._34;
 		_41 = m._41; _42 = m._42; _43 = m._43; _44 = m._44;
 	}
-	
+
 	public function load( a : Array<Float> ) {
 		_11 = a[0]; _12 = a[1]; _13 = a[2]; _14 = a[3];
 		_21 = a[4]; _22 = a[5]; _23 = a[6]; _24 = a[7];
 		_31 = a[8]; _32 = a[9]; _33 = a[10]; _34 = a[11];
 		_41 = a[12]; _42 = a[13]; _43 = a[14]; _44 = a[15];
 	}
-	
+
 	public function getFloats() {
 		return [_11, _12, _13, _14, _21, _22, _23, _24, _31, _32, _33, _34, _41, _42, _43, _44];
 	}
-	
+
 	public function toString() {
 		return "MAT=[\n" +
 			"  [ " + Math.fmt(_11) + ", " + Math.fmt(_12) + ", " + Math.fmt(_13) + ", " + Math.fmt(_14) + " ]\n" +
@@ -400,13 +425,13 @@ class Matrix {
 			"  [ " + Math.fmt(_41) + ", " + Math.fmt(_42) + ", " + Math.fmt(_43) + ", " + Math.fmt(_44) + " ]\n" +
 		"]";
 	}
-	
+
 	// ---- COLOR MATRIX FUNCTIONS -------
 
 	static inline var lumR = 0.212671;
 	static inline var lumG = 0.71516;
 	static inline var lumB = 0.072169;
-	
+
 	public function colorHue( hue : Float ) {
 		if( hue == 0. )
 			return;
@@ -427,7 +452,7 @@ class Matrix {
 		tmp._43 = 0;
 		multiply3x4(this, tmp);
 	}
-	
+
 	public function colorSaturation( sat : Float ) {
 		var is = 1 - sat;
 		var r = is * lumR;
@@ -447,7 +472,7 @@ class Matrix {
 		tmp._43 = 0;
 		multiply3x4(this, tmp);
 	}
-	
+
 	public function colorContrast( contrast : Float ) {
 		var v = contrast + 1;
 		tmp._11 = v;
@@ -470,7 +495,57 @@ class Matrix {
 		_42 += brightness;
 		_43 += brightness;
 	}
-	
+
+	public function colorBits( bits : Int, blend : Float ) {
+		var t11 = 0., t12 = 0., t13 = 0.;
+		var t21 = 0., t22 = 0., t23 = 0.;
+		var t31 = 0., t32 = 0., t33 = 0.;
+		var c = bits;
+		if( c & 1 == 1 ) t11 = 1; c >>= 1;
+		if( c & 1 == 1 ) t12 = 1; c >>= 1;
+		if( c & 1 == 1 ) t13 = 1; c >>= 1;
+		if( c & 1 == 1 ) t21 = 1; c >>= 1;
+		if( c & 1 == 1 ) t22 = 1; c >>= 1;
+		if( c & 1 == 1 ) t23 = 1; c >>= 1;
+		if( c & 1 == 1 ) t31 = 1; c >>= 1;
+		if( c & 1 == 1 ) t32 = 1; c >>= 1;
+		if( c & 1 == 1 ) t33 = 1; c >>= 1;
+		var r = t11 + t21 + t31;
+		var g = t12 + t22 + t32;
+		var b = t13 + t23 + t33;
+		if( r > 1 ) { t11 /= r; t21 /= r; t31 /= r; }
+		if( g > 1 ) { t12 /= r; t22 /= r; t32 /= r; }
+		if( b > 1 ) { t13 /= r; t23 /= r; t33 /= r; }
+
+		// multiply our 3x3 by current matrix
+
+		var b11 = _11 * t11 + _12 * t21 + _13 * t31;
+		var b12 = _11 * t12 + _12 * t22 + _13 * t32;
+		var b13 = _11 * t13 + _12 * t23 + _13 * t33;
+
+		var b21 = _21 * t11 + _22 * t21 + _23 * t31;
+		var b22 = _21 * t12 + _22 * t22 + _23 * t32;
+		var b23 = _21 * t13 + _22 * t23 + _23 * t33;
+
+		var b31 = _31 * t11 + _32 * t21 + _33 * t31;
+		var b32 = _31 * t12 + _32 * t22 + _33 * t32;
+		var b33 = _31 * t13 + _32 * t23 + _33 * t33;
+
+		// blend it
+		var ik = blend, k = 1 - ik;
+		_11 = _11 * k + b11 * ik;
+		_12 = _12 * k + b12 * ik;
+		_13 = _13 * k + b13 * ik;
+		_21 = _21 * k + b21 * ik;
+		_22 = _22 * k + b22 * ik;
+		_23 = _23 * k + b23 * ik;
+		_31 = _31 * k + b31 * ik;
+		_32 = _32 * k + b32 * ik;
+		_33 = _33 * k + b33 * ik;
+	}
+
+	// STATICS
+
 	public static function I() {
 		var m = new Matrix();
 		m.identity();
@@ -482,7 +557,7 @@ class Matrix {
 		m.load(a);
 		return m;
 	}
-	
+
 	public static function T( x = 0., y = 0., z = 0. ) {
 		var m = new Matrix();
 		m.initTranslate(x, y, z);
@@ -501,64 +576,37 @@ class Matrix {
 		return m;
 	}
 
-	//retrieves pos vector from matrix
-	public inline function pos( ? v: Vector)
-	{
-		if( v == null )
-			return new Vector( _41, _42 , _43 , _44  );
-		else
-		{
-			v.x = _41;
-			v.y = _42;
-			v.z = _43;
-			v.w = _44;
-			return v;
+	/**
+		Build a rotation Matrix so the X axis will look at the given direction, and the Z axis will be the Up vector ([0,0,1] by default)
+	**/
+	public static function lookAtX( dir : Vector, ?up : Vector, ?m : Matrix ) {
+		if( up == null ) up = new Vector(0, 0, 1);
+		if( m == null ) m = new Matrix();
+		var ax = dir.getNormalized();
+		var ay = up.cross(ax).getNormalized();
+		if( ay.lengthSq() < Math.EPSILON ) {
+			ay.x = ax.y;
+			ay.y = ax.z;
+			ay.z = ax.x;
 		}
+		var az = ax.cross(ay);
+		m._11 = ax.x;
+		m._12 = ax.y;
+		m._13 = ax.z;
+		m._14 = 0;
+		m._21 = ay.x;
+		m._22 = ay.y;
+		m._23 = ay.z;
+		m._24 = 0;
+		m._31 = az.x;
+		m._32 = az.y;
+		m._33 = az.z;
+		m._34 = 0;
+		m._41 = 0;
+		m._42 = 0;
+		m._43 = 0;
+		m._44 = 1;
+		return m;
 	}
-	
-	//retrieves at vector from matrix
-	public inline function at( ?v:Vector)
-	{
-		if( v == null )
-			return new Vector( _31, _32 , _33 , _34  );
-		else
-		{
-			v.x = _31;
-			v.y = _32;
-			v.z = _33;
-			v.w = _34;
-			return v;
-		}
-	}
-	
-	//retrieves up vector from matrix
-	public inline function up(?v:Vector)
-	{
-		if( v == null )
-			return new Vector( _21, _22 , _23 , _24  );
-		else
-		{
-			v.x = _21;
-			v.y = _22;
-			v.z = _23;
-			v.w = _24;
-			return v;
-		}
-	}
-	
-	//retrieves right vector from matrix
-	public inline function right(?v:Vector)
-	{
-		if( v == null )
-			return new Vector( _11, _12 , _13 , _14  );
-		else
-		{
-			v.x = _11;
-			v.y = _12;
-			v.z = _13;
-			v.w = _14;
-			return v;
-		}
-	}
-	
+
 }

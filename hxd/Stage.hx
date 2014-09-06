@@ -1,19 +1,31 @@
 package hxd;
 
 class Stage {
-	
+
 	#if (flash || openfl)
 	var stage : flash.display.Stage;
 	var fsDelayed : Bool;
 	#end
 	var resizeEvents : List < Void -> Void > ;
-	var eventTargets : List<Event -> Void>;
-	
-	public var width(get, null) : Float;
-	public var height(get, null) : Float;
-	public var mouseX(get, null) : Float;
-	public var mouseY(get, null) : Float;
-	
+	var eventTargets : List < Event -> Void > ;
+
+	#if js
+	@:allow(hxd)
+	static function getCanvas() {
+		var canvas : js.html.CanvasElement = cast js.Browser.document.getElementById("webgl");
+		if( canvas == null ) throw "Missing canvas#webgl";
+		return canvas;
+	}
+	var canvas : js.html.CanvasElement;
+	var canvasPos : js.html.ClientRect;
+	#end
+
+	public var width(get, null) : Int;
+	public var height(get, null) : Int;
+	public var mouseX(get, null) : Int;
+	public var mouseY(get, null) : Int;
+	public var mouseLock(get, set) : Bool;
+
 	function new() {
 		eventTargets = new List();
 		resizeEvents = new List();
@@ -37,50 +49,57 @@ class Stage {
 			stage.addEventListener(flash.events.MouseEvent.RIGHT_MOUSE_UP, onRMouseUp);
 		}
 		#elseif js
-		var canvas: js.html.CanvasElement = cast js.Browser.document.getElementById("webgl");
-		if ( canvas != null ) {
-            canvas.addEventListener("mousedown", onMouseDown);
-            canvas.addEventListener("mousemove", onMouseMove);
-            canvas.addEventListener("mouseup", onMouseUp);
-            canvas.addEventListener("mousewheel", onMouseWheel);
-            canvas.addEventListener("keydown", onKeyDown);
-            canvas.addEventListener("keyup", onKeyUp);
-            canvas.addEventListener("resize", onResize);
-        } else {
-            js.Browser.window.addEventListener("mousedown", onMouseDown);
-            js.Browser.window.addEventListener("mousemove", onMouseMove);
-            js.Browser.window.addEventListener("mouseup", onMouseUp);
-            js.Browser.window.addEventListener("mousewheel", onMouseWheel);
-            js.Browser.window.addEventListener("keydown", onKeyDown);
-            js.Browser.window.addEventListener("keyup", onKeyUp);
-            js.Browser.window.addEventListener("resize", onResize);
-        }
+		canvas = getCanvas();
+		canvasPos = canvas.getBoundingClientRect();
+		js.Browser.window.addEventListener("mousedown", onMouseDown);
+		js.Browser.window.addEventListener("mousemove", onMouseMove);
+		js.Browser.window.addEventListener("mouseup", onMouseUp);
+		js.Browser.window.addEventListener("mousewheel", onMouseWheel);
+		js.Browser.window.addEventListener("keydown", onKeyDown);
+		js.Browser.window.addEventListener("keyup", onKeyUp);
+		canvas.addEventListener("mousedown", function(e) {
+			onMouseDown(e);
+			e.stopPropagation();
+			e.preventDefault();
+		});
+		var curW = this.width, curH = this.height;
+		var t0 = new haxe.Timer(100);
+		t0.run = function() {
+			canvasPos = canvas.getBoundingClientRect();
+			var cw = this.width, ch = this.height;
+			if( curW != cw || curH != ch ) {
+				curW = cw;
+				curH = ch;
+				onResize(null);
+			}
+		};
 		#end
 		#if flash
 		if( untyped hxd.System.isAir() )
 			setupOnCloseEvent();
 		#end
 	}
-	
+
 	#if flash
 	function setupOnCloseEvent() {
 		var nw : flash.events.EventDispatcher = Reflect.field(stage, "nativeWindow");
+		if( nw == null ) return;
 		nw.addEventListener("closing", function(e:flash.events.Event) {
 			if( !onClose() )
 				e.preventDefault();
 		});
 	}
 	#end
-	
+
 	public dynamic function onClose() {
 		return true;
 	}
-	
+
 	public function event( e : hxd.Event ) {
 		for( et in eventTargets )
 			et(e);
 	}
-	
+
 	public function addEventTarget(et) {
 		eventTargets.add(et);
 	}
@@ -88,7 +107,7 @@ class Stage {
 	public function removeEventTarget(et) {
 		eventTargets.remove(et);
 	}
-	
+
 	public function addResizeEvent( f : Void -> Void ) {
 		resizeEvents.push(f);
 	}
@@ -96,7 +115,7 @@ class Stage {
 	public function removeResizeEvent( f : Void -> Void ) {
 		resizeEvents.remove(f);
 	}
-	
+
 	public function getFrameRate() : Float {
 		#if (flash || openfl)
 		return stage.frameRate;
@@ -122,21 +141,21 @@ class Stage {
 		#else
 		#end
 	}
-	
+
 	static var inst = null;
 	public static function getInstance() {
 		if( inst == null ) inst = new Stage();
 		return inst;
 	}
-	
+
 #if (flash || openfl)
 
 	inline function get_mouseX() {
-		return stage.mouseX;
+		return Std.int(stage.mouseX);
 	}
 
 	inline function get_mouseY() {
-		return stage.mouseY;
+		return Std.int(stage.mouseY);
 	}
 
 	inline function get_width() {
@@ -146,7 +165,23 @@ class Stage {
 	inline function get_height() {
 		return stage.stageHeight;
 	}
-	
+
+	inline function get_mouseLock() {
+		#if openfl
+		return false;
+		#else
+		return stage.mouseLock;
+		#end
+	}
+
+	inline function set_mouseLock(v) {
+		#if openfl
+		return false;
+		#else
+		return stage.mouseLock = v;
+		#end
+	}
+
 	function onResize(_) {
 		for( e in resizeEvents )
 			e();
@@ -155,13 +190,13 @@ class Stage {
 	function onMouseDown(e:Dynamic) {
 		event(new Event(EPush, mouseX, mouseY));
 	}
-	
+
 	function onRMouseDown(e:Dynamic) {
 		var e = new Event(EPush, mouseX, mouseY);
 		e.button = 1;
 		event(e);
 	}
-	
+
 	function onMouseUp(e:Dynamic) {
 		event(new Event(ERelease, mouseX, mouseY));
 	}
@@ -171,29 +206,30 @@ class Stage {
 		e.button = 1;
 		event(e);
 	}
-	
+
 	function onMouseMove(e:Dynamic) {
 		event(new Event(EMove, mouseX, mouseY));
 	}
-	
+
 	function onMouseWheel(e:flash.events.MouseEvent) {
 		var ev = new Event(EWheel, mouseX, mouseY);
 		ev.wheelDelta = -e.delta / 3.0;
 		event(ev);
 	}
-	
+
 	function onKeyUp(e:flash.events.KeyboardEvent) {
-		var ev = new Event(EKeyUp);
+		var ev = new Event(EKeyUp, mouseX, mouseY);
 		ev.keyCode = e.keyCode;
 		ev.charCode = getCharCode(e);
 		event(ev);
 	}
 
 	function onKeyDown(e:flash.events.KeyboardEvent) {
-		var ev = new Event(EKeyDown);
+		var ev = new Event(EKeyDown, mouseX, mouseY);
 		ev.keyCode = e.keyCode;
 		ev.charCode = getCharCode(e);
 		event(ev);
+		#if flash
 		// prevent escaping fullscreen in air
 		if( e.keyCode == flash.ui.Keyboard.ESCAPE ) e.preventDefault();
 		// prevent back exiting app in mobile
@@ -201,8 +237,9 @@ class Stage {
 			e.preventDefault();
 			e.stopImmediatePropagation();
 		}
+		#end
 	}
-	
+
 	function getCharCode( e : flash.events.KeyboardEvent ) {
 		#if openfl
 		return e.charCode;
@@ -241,7 +278,7 @@ class Stage {
 		}
 		#end
 	}
-	
+
 	function onTouchDown(e:flash.events.TouchEvent) {
 		var ev = new Event(EPush, e.localX, e.localY);
 		ev.touchId = e.touchPointID;
@@ -253,32 +290,41 @@ class Stage {
 		ev.touchId = e.touchPointID;
 		event(ev);
 	}
-	
+
 	function onTouchMove(e:flash.events.TouchEvent) {
 		var ev = new Event(EMove, e.localX, e.localY);
 		ev.touchId = e.touchPointID;
 		event(ev);
 	}
-	
+
 #elseif js
 
-	var curMouseX : Float;
-	var curMouseY : Float;
+	var curMouseX : Float = 0.;
+	var curMouseY : Float = 0.;
 
 	function get_width() {
-        return hxd.System.width;
+		return Math.round(canvasPos.width * js.Browser.window.devicePixelRatio);
 	}
 
 	function get_height() {
-        return hxd.System.height;
+		return Math.round(canvasPos.height * js.Browser.window.devicePixelRatio);
 	}
 
 	function get_mouseX() {
-		return curMouseX;
+		return Math.round((curMouseX - canvasPos.left) * js.Browser.window.devicePixelRatio);
 	}
 
 	function get_mouseY() {
-		return curMouseY;
+		return Math.round((curMouseY - canvasPos.top) * js.Browser.window.devicePixelRatio);
+	}
+
+	function get_mouseLock() {
+		return false;
+	}
+
+	function set_mouseLock(b) {
+		throw "Mouse lock not supported";
+		return false;
 	}
 
 	function onMouseDown(e:js.html.MouseEvent) {
@@ -292,33 +338,33 @@ class Stage {
         e.button = 0;
 		event(e);
 	}
-	
+
 	function onMouseMove(e:js.html.MouseEvent) {
 		curMouseX = e.clientX - untyped e.target.offsetLeft;
 		curMouseY = e.clientY - untyped e.target.offsetTop;
 		event(new Event(EMove, mouseX, mouseY));
 	}
-	
+
 	function onMouseWheel(e:js.html.MouseEvent) {
 		var ev = new Event(EWheel, mouseX, mouseY);
 		ev.wheelDelta = untyped -e.wheelDelta / 30.0;
 		event(ev);
 	}
-	
+
 	function onKeyUp(e:js.html.KeyboardEvent) {
-		var ev = new Event(EKeyUp);
+		var ev = new Event(EKeyUp, mouseX, mouseY);
 		ev.keyCode = e.keyCode;
 		ev.charCode = e.charCode;
 		event(ev);
 	}
 
 	function onKeyDown(e:js.html.KeyboardEvent) {
-		var ev = new Event(EKeyDown);
+		var ev = new Event(EKeyDown, mouseX, mouseY);
 		ev.keyCode = e.keyCode;
 		ev.charCode = e.charCode;
 		event(ev);
 	}
-	
+
 	function onResize(e) {
 		for( r in resizeEvents )
 			r();
@@ -333,7 +379,7 @@ class Stage {
 	function get_mouseY() {
 		return 0;
 	}
-	
+
 	function get_width() {
 		return 0;
 	}
@@ -352,32 +398,6 @@ class Stage {
 			callb();
 			return;
 		}
-		// init done by hand
-		var width = 750, height = 450, fps = 60, bgColor = 0x808080;
-		flash.Lib.create(
-			function() {
-				flash.Lib.current.stage.align = flash.display.StageAlign.TOP_LEFT;
-				flash.Lib.current.stage.scaleMode = flash.display.StageScaleMode.NO_SCALE;
-				flash.Lib.current.loaderInfo = flash.display.LoaderInfo.create (null);
-				callb();
-			},
-			width, height, fps, bgColor,
-			(true ? flash.Lib.HARDWARE : 0) |
-			(true ? flash.Lib.ALLOW_SHADERS : 0) |
-			(true ? flash.Lib.REQUIRE_SHADERS : 0) |
-			(false ? flash.Lib.DEPTH_BUFFER : 0) |
-			(false ? flash.Lib.STENCIL_BUFFER : 0) |
-			(true ? flash.Lib.RESIZABLE : 0) |
-			(false ? flash.Lib.BORDERLESS : 0) |
-			(false ? flash.Lib.VSYNC : 0) |
-			(false ? flash.Lib.FULLSCREEN : 0) |
-			(0 == 4 ? flash.Lib.HW_AA_HIRES : 0) |
-			(0 == 2 ? flash.Lib.HW_AA : 0),
-			"h3d", null
-			#if mobile
-			, null /* ScaledStage : TODO? */
-			#end
-		);
 	}
 
 #end

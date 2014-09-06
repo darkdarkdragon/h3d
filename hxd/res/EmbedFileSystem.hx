@@ -5,7 +5,7 @@ package hxd.res;
 @:allow(hxd.res.EmbedFileSystem)
 @:access(hxd.res.EmbedFileSystem)
 private class EmbedEntry extends FileEntry {
-	
+
 	var fs : EmbedFileSystem;
 	var relPath : String;
 	#if flash
@@ -39,9 +39,11 @@ private class EmbedEntry extends FileEntry {
 		return bytes.get(0) | (bytes.get(1) << 8) | (bytes.get(2) << 16) | (bytes.get(3) << 24);
 		#end
 	}
-	
+
 	override function getBytes() : haxe.io.Bytes {
 		#if flash
+		if( data == null )
+			return null;
 		if( bytes == null )
 			open();
 		return haxe.io.Bytes.ofData(bytes);
@@ -51,7 +53,7 @@ private class EmbedEntry extends FileEntry {
 		return bytes;
 		#end
 	}
-	
+
 	override function open() {
 		#if flash
 		if( bytes == null )
@@ -65,7 +67,7 @@ private class EmbedEntry extends FileEntry {
 		readPos = 0;
 		#end
 	}
-	
+
 	override function skip( nbytes : Int ) {
 		#if flash
 		bytes.position += nbytes;
@@ -73,7 +75,7 @@ private class EmbedEntry extends FileEntry {
 		readPos += nbytes;
 		#end
 	}
-	
+
 	override function readByte() : Int {
 		#if flash
 		return bytes.readUnsignedByte();
@@ -81,7 +83,7 @@ private class EmbedEntry extends FileEntry {
 		return bytes.get(readPos++);
 		#end
 	}
-	
+
 	override function read( out : haxe.io.Bytes, pos : Int, size : Int ) : Void {
 		#if flash
 		bytes.readBytes(out.getData(), pos, size);
@@ -99,14 +101,14 @@ private class EmbedEntry extends FileEntry {
 		readPos = 0;
 		#end
 	}
-	
+
 	override function load( ?onReady : Void -> Void ) : Void {
 		#if (flash || js)
 		if( onReady != null ) haxe.Timer.delay(onReady, 1);
 		#end
 	}
-	
-	override function loadBitmap( onLoaded : hxd.BitmapData -> Void ) : Void {
+
+	override function loadBitmap( onLoaded : LoadedBitmap -> Void ) : Void {
 		#if flash
 		var loader = new flash.display.Loader();
 		loader.contentLoaderInfo.addEventListener(flash.events.IOErrorEvent.IO_ERROR, function(e:flash.events.IOErrorEvent) {
@@ -115,32 +117,50 @@ private class EmbedEntry extends FileEntry {
 		loader.contentLoaderInfo.addEventListener(flash.events.Event.COMPLETE, function(_) {
 			close();
 			var content : flash.display.Bitmap = cast loader.content;
-			onLoaded(hxd.BitmapData.fromNative(content.bitmapData));
+			onLoaded(new LoadedBitmap(content.bitmapData));
 			loader.unload();
 		});
 		open();
 		loader.loadBytes(bytes);
+		#elseif js
+		// directly get the base64 encoded data from resources
+		var rawData = null;
+		for( res in @:privateAccess haxe.Resource.content )
+			if( res.name == data ) {
+				rawData = res.data;
+				break;
+			}
+		if( rawData == null ) throw "Missing resource " + data;
+		var image = new js.html.Image();
+		image.onload = function(_) {
+			onLoaded(new LoadedBitmap(image));
+		};
+		var extra = "";
+		var bytes = (rawData.length * 6) >> 3;
+		for( i in 0...(3-(bytes*4)%3)%3 )
+			extra += "=";
+		image.src = "data:image/" + extension + ";base64," + rawData + extra;
 		#else
 		throw "TODO";
 		#end
 	}
-	
+
 	override function get_isDirectory() {
 		return fs.isDirectory(relPath);
 	}
-	
+
 	override function get_path() {
-		return relPath == null ? "<root>" : relPath;
+		return relPath == "." ? "<root>" : relPath;
 	}
-	
+
 	override function exists( name : String ) {
-		return fs.exists(relPath == null ? name : relPath + "/" + name);
+		return fs.exists(relPath == "." ? name : relPath + "/" + name);
 	}
-	
+
 	override function get( name : String ) {
-		return fs.get(relPath == null ? name : relPath + "/" + name);
+		return fs.get(relPath == "." ? name : relPath + "/" + name);
 	}
-	
+
 	override function get_size() {
 		#if flash
 		open();
@@ -154,23 +174,23 @@ private class EmbedEntry extends FileEntry {
 	override function iterator() {
 		return new hxd.impl.ArrayIterator(fs.subFiles(relPath));
 	}
-	
+
 }
 
 #end
 
 class EmbedFileSystem #if !macro implements FileSystem #end {
-	
+
 	#if !macro
-	
+
 	var root : Dynamic;
-	
+
 	function new(root) {
 		this.root = root;
 	}
-	
+
 	public function getRoot() : FileEntry {
-		return new EmbedEntry(this,"root",null,null);
+		return new EmbedEntry(this,"root",".",null);
 	}
 
 	static var invalidChars = ~/[^A-Za-z0-9_]/g;
@@ -181,7 +201,7 @@ class EmbedFileSystem #if !macro implements FileSystem #end {
 		return "R_" + invalidChars.replace(path, "_");
 		#end
 	}
-	
+
 	#if flash
 	function open( path : String ) : Class<flash.utils.ByteArray> {
 		var name = resolve(path);
@@ -192,21 +212,25 @@ class EmbedFileSystem #if !macro implements FileSystem #end {
 		}
 		return cl;
 	}
-	
+
 	#end
+
+	function splitPath( path : String ) {
+		return path == "." ? [] : path.split("/");
+	}
 
 	function subFiles( path : String ) : Array<FileEntry> {
 		var r = root;
-		for( p in path.split("/") )
+		for( p in splitPath(path) )
 			r = Reflect.field(r, p);
 		if( r == null )
 			throw path + " is not a directory";
-		return [for( name in Reflect.fields(r) ) get(path + "/" + name)];
+		return [for( name in Reflect.fields(r) ) get(path == "." ? name : path + "/" + name)];
 	}
-	
+
 	function isDirectory( path : String ) {
 		var r = root;
-		for( p in path.split("/") )
+		for( p in splitPath(path) )
 			r = Reflect.field(r, p);
 		return r != null;
 	}
@@ -214,37 +238,26 @@ class EmbedFileSystem #if !macro implements FileSystem #end {
 	public function exists( path : String ) {
 		#if flash
 		var f = open(path);
-		return f != null;
+		return f != null || isDirectory(path);
 		#else
 		var r = root;
-		for( p in path.split("/") ) {
+		for( p in splitPath(path) ) {
 			r = Reflect.field(r, p);
 			if( r == null ) return false;
 		}
 		return true;
 		#end
 	}
-	
+
 	public function get( path : String ) {
-		#if flash
-		var f = open(path);
-		if( f == null && !isDirectory(path) )
-			throw "File not found " + path;
-		return new EmbedEntry(this, path.split("/").pop(), path, f);
-		#else
 		if( !exists(path) )
-			throw "File not found " + path;
-		var id = resolve(path);
+			throw new NotFound(path);
+		var id = #if flash open(path) #else resolve(path) #end;
 		return new EmbedEntry(this, path.split("/").pop(), path, id);
-		#end
 	}
-	
+
 	#end
-	
-	public static macro function init() {
-		return macro hxd.Res.loader = new hxd.res.Loader(hxd.res.EmbedFileSystem.create());
-	}
-	
+
 	public static macro function create( ?basePath : String, ?options : EmbedOptions ) {
 		var f = new FileTree(basePath);
 		var data = f.embed(options);
@@ -255,5 +268,5 @@ class EmbedFileSystem #if !macro implements FileSystem #end {
 		};
 		return macro { $types; @:privateFields new hxd.res.EmbedFileSystem(haxe.Unserializer.run($v { sdata } )); };
 	}
-	
+
 }

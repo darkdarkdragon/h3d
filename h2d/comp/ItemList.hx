@@ -1,21 +1,28 @@
 package h2d.comp;
 
 class ItemList extends Box {
-	
+
 	public var selected(default,set) = -1;
 	var inputs : Array<h2d.Interactive>;
-	
+
 	public function new(?parent) {
 		super(Vertical, parent);
 		this.name = "itemlist";
 		inputs = [];
 	}
-	
+
 	function set_selected(v:Int) {
 		needRebuild = true;
 		return selected = v;
 	}
-	
+
+	function onWheel( e : hxd.Event ) {
+		scrollY -= e.wheelDelta * (components.length == 0 ? 0 : (components[0].height + style.verticalSpacing));
+		if( scrollY > 0 ) scrollY = 0;
+		e.propagate = false;
+		needRebuild = true;
+	}
+
 	override function resizeRec( ctx : Context ) {
 		super.resizeRec(ctx);
 		if( !ctx.measure ) {
@@ -39,21 +46,25 @@ class ItemList extends Box {
 				}
 				if( selected ) {
 					if( cursor != null ) cursor.remove();
-					cursor = new h2d.Bitmap(h2d.Tile.fromColor(style.selectionColor, Std.int(int.width), Std.int(int.height)), int);
+					cursor = new h2d.Bitmap(h2d.Tile.fromColor(style.selectionColor, Std.int(int.width), Std.int(int.height), (style.selectionColor>>>24)/255), int);
 					int.onOver = function(_) {
+						onItemOver(i);
 					};
 					int.onOut = function(_) {
+						onItemOver(-1);
 					}
 					int.onPush = function(_) {
 					}
 				} else {
 					int.onOver = function(_) {
 						if( cursor != null ) cursor.remove();
-						cursor = new h2d.Bitmap(h2d.Tile.fromColor(style.cursorColor, Std.int(int.width), Std.int(int.height)), int);
+						cursor = new h2d.Bitmap(h2d.Tile.fromColor(style.cursorColor, Std.int(int.width), Std.int(int.height), (style.cursorColor>>>24)/255 ), int);
+						onItemOver(i);
 					};
 					int.onOut = function(_) {
 						if( cursor != null ) cursor.remove();
 						cursor = null;
+						onItemOver(-1);
 					}
 					int.onPush = function(_) {
 						if( this.selected != i ) {
@@ -62,6 +73,7 @@ class ItemList extends Box {
 						}
 					}
 				}
+				int.onWheel = onWheel;
 				if( Lambda.indexOf(childs,int) != 1 + i ) {
 					childs.remove(int);
 					childs.insert(1 + i, int); // insert over bg
@@ -70,8 +82,11 @@ class ItemList extends Box {
 			}
 		}
 	}
-	
+
+	public dynamic function onItemOver( current : Int ) {
+	}
+
 	public dynamic function onChange( selected : Int ) {
 	}
-	
+
 }

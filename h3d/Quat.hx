@@ -2,62 +2,101 @@ package h3d;
 using hxd.Math;
 
 class Quat {
-	
+
 	public var x : Float;
 	public var y : Float;
 	public var z : Float;
 	public var w : Float;
-	
+
 	public inline function new( x = 0., y = 0., z = 0., w = 1. ) {
 		this.x = x;
 		this.y = y;
 		this.z = z;
 		this.w = w;
 	}
-	
+
 	public inline function set(x, y, z, w) {
 		this.x = x;
 		this.y = y;
 		this.z = z;
 		this.w = w;
 	}
-	
+
 	public inline function identity() {
 		x = y = z = 0;
 		w = 1;
 	}
-	
+
 	public inline function lengthSq() {
 		return x * x + y * y + z * z + w * w;
 	}
-	
+
 	public inline function length() {
 		return lengthSq().sqrt();
 	}
-	
+
 	public function clone() {
 		return new Quat(x, y, z, w);
 	}
-	
-	public inline function initDirection( dir : Vector, ?up : Vector ) {
-		if( up == null ) {
-			// assume [0,0,1] UP version
-			x = -dir.y;
-			y = dir.x;
-			z = 0;
-			w = dir.z + dir.length();
-			normalize();
+
+	public function initMoveTo( from : Vector, to : Vector ) {
+		//		H = Normalize(From + To)
+		//		Q = (From ^ H, From . H)
+		//
+		// We have an issue when From.To moves towards -1, a small tilt on From ^ To will result in big tilt.
+		var hx = from.x + to.x;
+		var hy = from.y + to.y;
+		var hz = from.z + to.z;
+		var h = Math.invSqrt(hx * hx + hy * hy + hz * hz);
+		x = from.y * hz - from.z * hy;
+		y = from.z * hx - from.x * hz;
+		z = from.x * hy - from.y * hx;
+		w = from.x * hx + from.y * hy + from.z * hz;
+		normalize();
+	}
+
+	public function initDirection( dir : Vector ) {
+		// inlined version of initRotationMatrix(Matrix.lookAtX(dir))
+		var ax = dir.clone().getNormalized();
+		var ay = new Vector(-ax.y, ax.x, 0).getNormalized();
+		if( ay.lengthSq() < Math.EPSILON ) {
+			ay.x = ax.y;
+			ay.y = ax.z;
+			ay.z = ax.x;
+		}
+		var az = ax.cross(ay);
+		var tr = ax.x + ay.y + az.z;
+		if( tr > 0 ) {
+			var s = (tr + 1.0).sqrt() * 2;
+			var is = 1 / s;
+			x = (ay.z - az.y) * is;
+			y = (az.x - ax.z) * is;
+			z = (ax.y - ay.x) * is;
+			w = 0.25 * s;
+		} else if( ax.x > ay.y && ax.x > az.z ) {
+			var s = (1.0 + ax.x - ay.y - az.z).sqrt() * 2;
+			var is = 1 / s;
+			x = 0.25 * s;
+			y = (ay.x + ax.y) * is;
+			z = (az.x + ax.z) * is;
+			w = (ay.z - az.y) * is;
+		} else if( ay.y > az.z ) {
+			var s = (1.0 + ay.y - ax.x - az.z).sqrt() * 2;
+			var is = 1 / s;
+			x = (ay.x + ax.y) * is;
+			y = 0.25 * s;
+			z = (az.y + ay.z) * is;
+			w = (az.x - ax.z) * is;
 		} else {
-			// LeftHanded (RH might use dir.cross(up) ?)
-			var tmp = up.cross(dir);
-			x = tmp.x;
-			y = tmp.y;
-			z = tmp.z;
-			w = dir.length() + dir.dot3(up);
-			normalize();
+			var s = (1.0 + az.z - ax.x - ay.y).sqrt() * 2;
+			var is = 1 / s;
+			x = (az.x + ax.z) * is;
+			y = (az.y + ay.z) * is;
+			z = 0.25 * s;
+			w = (ax.y - ay.x) * is;
 		}
 	}
-	
+
 	public function initRotateAxis( x : Float, y : Float, z : Float, a : Float ) {
 		var sin = (a / 2).sin();
 		var cos = (a / 2).cos();
@@ -67,7 +106,7 @@ class Quat {
 		this.w = cos * (x * x + y * y + z * z).sqrt(); // allow not normalized axis
 		normalize();
 	}
-	
+
 	public function initRotateMatrix( m : Matrix ) {
 		var tr = m._11 + m._22 + m._33;
 		if( tr > 0 ) {
@@ -100,7 +139,7 @@ class Quat {
 			w = (m._12 - m._21) * is;
 		}
 	}
-	
+
 	public function normalize() {
 		var len = x * x + y * y + z * z + w * w;
 		if( len < hxd.Math.EPSILON ) {
@@ -114,7 +153,7 @@ class Quat {
 			w *= m;
 		}
 	}
-	
+
 	public function initRotate( ax : Float, ay : Float, az : Float ) {
 		var sinX = ( ax * 0.5 ).sin();
 		var cosX = ( ax * 0.5 ).cos();
@@ -129,11 +168,7 @@ class Quat {
 		z = cosX * cosY * sinZ - sinX * sinY * cosZ;
 		w = cosX * cosYZ + sinX * sinYZ;
 	}
-	
-	public inline function add( q : Quat ) {
-		multiply(this, q);
-	}
-	
+
 	public function multiply( q1 : Quat, q2 : Quat ) {
 		var x2 = q1.x * q2.w + q1.w * q2.x + q1.y * q2.z - q1.z * q2.y;
 		var y2 = q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x;
@@ -144,21 +179,21 @@ class Quat {
 		z = z2;
 		w = w2;
 	}
-	
+
 	public function toMatrix() {
 		var m = new Matrix();
 		saveToMatrix(m);
 		return m;
 	}
-	
+
 	public function toEuler() {
 		return new Vector(
-			hxd.Math.atan2(2 * (y * w + x * z), 1 - 2 * (y * y + z * z)),
-			(2 * (x * y + z * w)).asin(),
-			hxd.Math.atan2(2 * (x * w - y * z), 1 - 2 * (x * x + z * z))
+			hxd.Math.atan2(2 * (x * w + y * z), 1 - 2 * (x * x + z * z)),
+			hxd.Math.atan2(2 * (y * w - x * z), 1 - 2 * (y * y - z * z)),
+			(2 * (x * y + z * w)).asin()
 		);
 	}
-	
+
 	public inline function lerp( q1 : Quat, q2 : Quat, v : Float, nearest = false ) {
 		var v2;
 		if( nearest && q1.dot(q2) < 0 )
@@ -197,13 +232,13 @@ class Quat {
 		this.z = q1.z * a + q2.z * b;
 		this.w = q1.w * a + q2.w * b;
 	}
-	
+
 	public inline function conjugate() {
 		x *= -1;
 		y *= -1;
 		z *= -1;
 	}
-	
+
 	/**
 		Negate the quaternion: this will not change the actual angle, use `conjugate` for that.
 	**/
@@ -213,11 +248,11 @@ class Quat {
 		z *= -1;
 		w *= -1;
 	}
-	
+
 	public inline function dot( q : Quat ) {
 		return x * q.x + y * q.y + z * q.z + w * q.w;
 	}
-	
+
 	/**
 		Save to a Left-Handed matrix
 	**/
@@ -249,9 +284,9 @@ class Quat {
 		m._44 = 1;
 		return m;
 	}
-	
+
 	public function toString() {
 		return '{${x.fmt()},${y.fmt()},${z.fmt()},${w.fmt()}}';
 	}
-	
+
 }

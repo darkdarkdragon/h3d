@@ -3,13 +3,13 @@ import hxd.Key;
 
 @:access(h2d.comp.Input.scene)
 class Input extends Interactive {
-	
+
 	var tf : h2d.Text;
 	var cursor : h2d.Bitmap;
 	var cursorPos(default,set) : Int;
-	
+
 	public var value(default, set) : String;
-	
+
 	public function new(?parent) {
 		super("input",parent);
 		tf = new h2d.Text(null, this);
@@ -64,9 +64,15 @@ class Input extends Interactive {
 		};
 		this.value = "";
 	}
-	
+
 	function set_cursorPos(v:Int) {
+		textAlign(tf);
 		cursor.x = tf.x + tf.calcTextWidth(value.substr(0, v)) + extLeft();
+		if( cursor.x > width - 4 ) {
+			var dx = cursor.x - (width - 4);
+			tf.x -= dx;
+			cursor.x -= dx;
+		}
 		return cursorPos = v;
 	}
 
@@ -74,16 +80,16 @@ class Input extends Interactive {
 		input.focus();
 		cursorPos = value.length;
 	}
-	
+
 	function get_value() {
 		return tf.text;
 	}
-	
+
 	function set_value(t) {
 		needRebuild = true;
 		return value = t;
 	}
-	
+
 	override function resize( ctx : Context ) {
 		if( ctx.measure ) {
 			tf.font = getFont();
@@ -100,7 +106,7 @@ class Input extends Interactive {
 		super.resize(ctx);
 		if( !ctx.measure ) {
 			cursor.y = extTop() - 1;
-			cursor.tile = h2d.Tile.fromColor(style.cursorColor | 0xFF000000, 1, Std.int(height - extTop() - extBottom() + 2));
+			cursor.tile = h2d.Tile.fromColor(style.cursorColor, 1, Std.int(height - extTop() - extBottom() + 2));
 		}
 	}
 
@@ -113,8 +119,8 @@ class Input extends Interactive {
 
 	public dynamic function onFocus() {
 	}
-	
+
 	public dynamic function onBlur() {
 	}
-	
+
 }

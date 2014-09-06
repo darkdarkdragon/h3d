@@ -1,26 +1,32 @@
 package h2d;
 
 class Layers extends Sprite {
-	
+
 	// the per-layer insert position
 	var layers : Array<Int>;
 	var layerCount : Int;
-	
+
 	public function new(?parent) {
 		super(parent);
 		layers = [];
 		layerCount = 0;
 	}
-	
+
 	override function addChild(s) {
 		addChildAt(s, 0);
 	}
-	
+
 	public inline function add(s, layer) {
 		return addChildAt(s, layer);
 	}
-	
+
 	override function addChildAt( s : Sprite, layer : Int ) {
+		if( s.parent == this ) {
+			var old = s.allocated;
+			s.allocated = false;
+			removeChild(s);
+			s.allocated = old;
+		}
 		// new layer
 		while( layer >= layerCount )
 			layers[layerCount++] = childs.length;
@@ -28,7 +34,7 @@ class Layers extends Sprite {
 		for( i in layer...layerCount )
 			layers[i]++;
 	}
-	
+
 	override function removeChild( s : Sprite ) {
 		for( i in 0...childs.length ) {
 			if( childs[i] == s ) {
@@ -44,7 +50,26 @@ class Layers extends Sprite {
 			}
 		}
 	}
-	
+
+	public function under( s : Sprite ) {
+		for( i in 0...childs.length )
+			if( childs[i] == s ) {
+				var pos = 0;
+				for( l in layers )
+					if( l > i )
+						break;
+					else
+						pos = l;
+				var p = i;
+				while( p > pos ) {
+					childs[p] = childs[p - 1];
+					p--;
+				}
+				childs[pos] = s;
+				break;
+			}
+	}
+
 	public function over( s : Sprite ) {
 		for( i in 0...childs.length )
 			if( childs[i] == s ) {
@@ -58,7 +83,19 @@ class Layers extends Sprite {
 				break;
 			}
 	}
-	
+
+	public function getLayer( layer : Int ) : Iterator<Sprite> {
+		var a;
+		if( layer >= layerCount )
+			a = [];
+		else {
+			var start = layer == 0 ? 0 : layers[layer - 1];
+			var max = layers[layer];
+			a = childs.slice(start, max);
+		}
+		return new hxd.impl.ArrayIterator(a);
+	}
+
 	public function ysort( layer : Int ) {
 		if( layer >= layerCount ) return;
 		var start = layer == 0 ? 0 : layers[layer - 1];
@@ -84,5 +121,5 @@ class Layers extends Sprite {
 		}
 	}
 
-	
+
 }

@@ -448,7 +448,7 @@ class Parser {
 			null;
 		};
 	}
-	
+
 	function mapIdent<T:EnumValue>( v : Value, vals : Array<T> ) : T {
 		var i = getIdent(v);
 		if( i == null ) return null;
@@ -544,7 +544,7 @@ class Parser {
 		default: null;
 		};
 	}
-	
+
 	function getImage( v : Value ) {
 		switch( v ) {
 		case VCall("url", [VString(url)]):
@@ -553,7 +553,7 @@ class Parser {
 			url = url.substr(22);
 			if( StringTools.endsWith(url, "=") ) url = url.substr(0, -1);
 			var bytes = haxe.crypto.Base64.decode(url);
-			return hxd.res.Any.fromBytes("icon",bytes).getTexture().getPixels();
+			return hxd.res.Any.fromBytes("icon",bytes).toImage().getPixels();
 		default:
 			return null;
 		}
@@ -654,7 +654,7 @@ class Parser {
 		}
 		return rules;
 	}
-	
+
 	public function parseClasses( css : String ) {
 		this.css = css;
 		pos = 0;
@@ -683,7 +683,7 @@ class Parser {
 			unexpected(readToken());
 		return classes;
 	}
-	
+
 	function updateClass( c : CssClass ) {
 		// map html types to comp ones
 		switch( c.node ) {
@@ -695,7 +695,7 @@ class Parser {
 		}
 		if( c.parent != null ) updateClass(c.parent);
 	}
-	
+
 	function readClass( parent ) : CssClass {
 		var c = new CssClass();
 		c.parent = parent;

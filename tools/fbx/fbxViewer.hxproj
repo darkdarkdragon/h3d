@@ -15,15 +15,16 @@
   </output>
   <!-- Other classes to be compiled into your SWF -->
   <classpaths>
-    <class path="..\.." />
+    <!-- example: <class path="..." /> -->
   </classpaths>
   <!-- Build options -->
   <build>
     <option directives="" />
     <option flashStrict="True" />
+    <option noInlineOnDebug="False" />
     <option mainClass="Viewer" />
     <option enabledebug="False" />
-    <option additional="-lib hxsl&#xA;-lib air3&#xA;-D h3d&#xA;-dce full" />
+    <option additional="-lib heaps&#xA;-lib air3&#xA;-dce full" />
   </build>
   <!-- haxelib libraries -->
   <haxelib>
@@ -40,6 +41,7 @@
   <!-- Paths to exclude from the Project Explorer tree -->
   <hiddenPaths>
     <hidden path="anim.hxml" />
+    <hidden path="obj" />
   </hiddenPaths>
   <!-- Executed before build -->
   <preBuildCommand />
@@ -48,7 +50,8 @@
   <!-- Other project options -->
   <options>
     <option showHiddenPaths="False" />
-    <option testMovie="Default" />
+    <option testMovie="OpenDocument" />
+    <option testMovieCommand="fbxViewer.app" />
   </options>
   <!-- Plugin storage -->
   <storage />

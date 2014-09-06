@@ -3,37 +3,66 @@ package h2d;
 class Anim extends Drawable {
 
 	public var frames : Array<Tile>;
-	public var currentFrame : Float;
+	public var currentFrame(get,set) : Float;
 	public var speed : Float;
 	public var loop : Bool = true;
-	
+	var curFrame : Float;
+
 	public function new( ?frames, ?speed, ?parent ) {
 		super(parent);
 		this.frames = frames == null ? [] : frames;
-		this.currentFrame = 0;
+		this.curFrame = 0;
 		this.speed = speed == null ? 15 : speed;
 	}
-	
-	public function play( frames ) {
-		this.frames = frames;
-		this.currentFrame = 0;
+
+	inline function get_currentFrame() {
+		return curFrame;
 	}
-	
+
+	public function play( frames, atFrame = 0. ) {
+		this.frames = frames == null ? [] : frames;
+		currentFrame = atFrame;
+	}
+
+	public dynamic function onAnimEnd() {
+	}
+
+	function set_currentFrame( frame : Float ) {
+		curFrame = frames.length == 0 ? 0 : frame % frames.length;
+		if( curFrame < 0 ) curFrame += frames.length;
+		return curFrame;
+	}
+
+	override function getBoundsRec( relativeTo, out ) {
+		super.getBoundsRec(relativeTo, out);
+		var tile = getFrame();
+		if( tile != null ) addBounds(relativeTo, out, tile.dx, tile.dy, tile.width, tile.height);
+	}
+
 	override function sync( ctx : RenderContext ) {
-		currentFrame += speed * ctx.elapsedTime;
-		if( loop )
-			currentFrame %= frames.length;
-		else if( currentFrame >= frames.length )
-			currentFrame = frames.length - 0.00001;
+		super.sync(ctx);
+		var prev = curFrame;
+		curFrame += speed * ctx.elapsedTime;
+		if( curFrame < frames.length )
+			return;
+		if( loop ) {
+			curFrame %= frames.length;
+			onAnimEnd();
+		} else if( curFrame >= frames.length ) {
+			curFrame = frames.length;
+			if( curFrame != prev ) onAnimEnd();
+		}
 	}
-	
+
 	public function getFrame() {
-		return frames[Std.int(currentFrame)];
+		var i = Std.int(curFrame);
+		if( i == frames.length ) i--;
+		return frames[i];
 	}
-	
+
 	override function draw( ctx : RenderContext ) {
 		var t = getFrame();
-		if( t != null ) drawTile(ctx.engine,t);
+		emitTile(ctx,t);
 	}
-	
+
 }

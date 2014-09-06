@@ -2,16 +2,13 @@ package h2d;
 
 class CachedBitmap extends Drawable {
 
-	var tex : h3d.mat.Texture;
 	public var width(default, set) : Int;
 	public var height(default, set) : Int;
 	public var freezed : Bool;
-	
+
 	var renderDone : Bool;
-	var realWidth : Int;
-	var realHeight : Int;
 	var tile : Tile;
-	
+
 	public function new( ?parent, width = -1, height = -1 ) {
 		super(parent);
 		this.width = width;
@@ -19,18 +16,17 @@ class CachedBitmap extends Drawable {
 	}
 
 	function clean() {
-		if( tex != null ) {
-			tex.dispose();
-			tex = null;
+		if( tile != null ) {
+			tile.dispose();
+			tile = null;
 		}
-		tile = null;
 	}
 
 	override function onDelete() {
 		clean();
 		super.onDelete();
 	}
-	
+
 	function set_width(w) {
 		clean();
 		width = w;
@@ -38,33 +34,28 @@ class CachedBitmap extends Drawable {
 	}
 
 	function set_height(h) {
-		if( tex != null ) {
-			tex.dispose();
-			tex = null;
-		}
+		clean();
 		height = h;
 		return h;
 	}
-	
+
 	public function getTile() {
 		if( tile == null ) {
-			var tw = 1, th = 1;
-			var engine = h3d.Engine.getCurrent();
-			realWidth = width < 0 ? engine.width : width;
-			realHeight = height < 0 ? engine.height : height;
-			while( tw < realWidth ) tw <<= 1;
-			while( th < realHeight ) th <<= 1;
-			tex = engine.mem.allocTargetTexture(tw, th);
+			var scene = getScene();
+			if( scene == null ) return null;
+			var tw = width < 0 ? scene.width : width;
+			var th = height < 0 ? scene.height : height;
+			var tex = new h3d.mat.Texture(tw, th, [Target]);
 			renderDone = false;
-			tile = new Tile(tex,0, 0, realWidth, realHeight);
+			tile = Tile.fromTexture(tex);
 		}
 		return tile;
 	}
 
 	override function drawRec( ctx : RenderContext ) {
-		drawTile(ctx.engine, tile);
+		emitTile(ctx, tile);
 	}
-	
+
 	override function sync( ctx : RenderContext ) {
 		if( posChanged ) {
 			calcAbsPos();
@@ -72,12 +63,13 @@ class CachedBitmap extends Drawable {
 				c.posChanged = true;
 			posChanged = false;
 		}
-		if( tex != null && ((width < 0 && tex.width < ctx.engine.width) || (height < 0 && tex.height < ctx.engine.height)) )
+		var scene = getScene();
+		if( tile != null && ((width < 0 && scene.width != tile.width) || (height < 0 && scene.height != tile.height)) )
 			clean();
 		var tile = getTile();
 		if( !freezed || !renderDone ) {
 			var oldA = matA, oldB = matB, oldC = matC, oldD = matD, oldX = absX, oldY = absY;
-			
+
 			// init matrix without rotation
 			matA = 1;
 			matB = 0;
@@ -85,10 +77,10 @@ class CachedBitmap extends Drawable {
 			matD = 1;
 			absX = 0;
 			absY = 0;
-			
+
 			// adds a pixels-to-viewport transform
-			var w = 2 / tex.width;
-			var h = -2 / tex.height;
+			var w = 2 / tile.width;
+			var h = -2 / tile.height;
 			absX = absX * w - 1;
 			absY = absY * h + 1;
 			matA *= w;
@@ -102,13 +94,12 @@ class CachedBitmap extends Drawable {
 				c.sync(ctx);
 			}
 
-			ctx.engine.setTarget(tex);
-			ctx.engine.setRenderZone(0, 0, realWidth, realHeight);
+			throw "Should not draw in sync!";
+			ctx.engine.setTarget(tile.getTexture());
 			for( c in childs )
 				c.drawRec(ctx);
 			ctx.engine.setTarget(null);
-			ctx.engine.setRenderZone();
-			
+
 			// restore
 			matA = oldA;
 			matB = oldB;
@@ -116,11 +107,11 @@ class CachedBitmap extends Drawable {
 			matD = oldD;
 			absX = oldX;
 			absY = oldY;
-			
+
 			renderDone = true;
 		}
 
 		super.sync(ctx);
 	}
-	
+
 }

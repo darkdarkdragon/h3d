@@ -19,11 +19,11 @@ class DynamicText {
 			Reflect.setField(obj, getDict(dict,e.att.id), parseXmlData(e,dict,idict));
 		return obj;
 	}
-	
+
 	static inline function getDict( d : Map<String,String>, x : String ) {
 		return d == null ? x : d.get(x);
 	}
-	
+
 	static function parseXmlData( x : haxe.xml.Fast, hdict : Map<String,String>, idict : Map<String,String> ) : Dynamic {
 		switch( x.name ) {
 		case "g":
@@ -69,9 +69,9 @@ class DynamicText {
 			throw "Unknown tag " + x.name;
 		}
 	}
-	
+
 	#if macro
-	
+
 	static function typeFromXml( x : haxe.xml.Fast, tdict : Map<String,Bool>, pos ) {
 		switch( x.name ) {
 		case "g":
@@ -112,7 +112,8 @@ class DynamicText {
 
 	public static function build( file : String, ?withDict : Bool ) {
 		var path = FileTree.resolvePath();
-		var x = Xml.parse(sys.io.File.getContent("res/" + file));
+		var x = Xml.parse(sys.io.File.getContent(path + "/" + file));
+		Context.registerModuleDependency(Context.getLocalModule(), path + "/" + file);
 		var fields = Context.getBuildFields();
 		var pos = Context.currentPos();
 		var tdict = new Map();

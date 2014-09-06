@@ -1,23 +1,110 @@
 package h2d.comp;
 import h2d.css.Defs;
 
+private typedef Query = Array<CssClass>;
+
 @:access(h2d.comp.Component)
 @:keep
 class JQuery {
-	
+
 	var root : Component;
 	var select : Array<Component>;
-	
+
 	public function new( root : Component, query : Dynamic ) {
 		while( root.parentComponent != null )
 			root = root.parentComponent;
 		this.root = root;
 		select = getSet(query);
 	}
-	
+
+	public function getComponents() {
+		return select;
+	}
+
 	public function toggleClass( cl : String, ?flag : Bool ) {
 		for( s in select ) s.toggleClass(cl,flag);
 		return this;
+	}
+
+	public function find( q : Dynamic ) {
+		if( Std.is(q, Component) )
+			return new JQuery(root, Lambda.has(select, q) ? null : q);
+		if( Std.is(q, String) ) {
+			var q = parseQuery(q);
+			var out = [];
+			for( s in select )
+				lookupRec(s, q, out);
+			return new JQuery(root, out);
+		}
+		throw "Invalid JQuery " + q;
+		return null;
+	}
+
+	public function filter( q : Dynamic ) {
+		if( Std.is(q, Component) )
+			return new JQuery(root, Lambda.has(select, q) ? null : q);
+		if( Std.is(q, String) ) {
+			var q = parseQuery(q);
+			return new JQuery(root, [for( s in select ) if( matchQuery(q, s) ) s]);
+		}
+		if( Std.is(q, JQuery) ) {
+			var q : JQuery = q;
+			return  new JQuery(root, [for( s in select ) if( Lambda.has(q.select, s) ) s]);
+		}
+		throw "Invalid JQuery " + q;
+		return null;
+	}
+
+	public function not( q : Dynamic ) {
+		if( Std.is(q, Component) )
+			return new JQuery(root, [for( s in select ) if( s != q ) s]);
+		if( Std.is(q, String) ) {
+			var q = parseQuery(q);
+			return new JQuery(root, [for( s in select ) if( !matchQuery(q, s) ) s]);
+		}
+		if( Std.is(q, JQuery) ) {
+			var q : JQuery = q;
+			return  new JQuery(root, [for( s in select ) if( !Lambda.has(q.select, s) ) s]);
+		}
+		throw "Invalid JQuery " + q;
+		return null;
+	}
+
+	public function click( f : JQuery -> Void ) {
+		for( c in select ) {
+			var int = Std.instance(c, Interactive);
+			if( int == null ) throw c + " is not interactive";
+			int.onClick = function() f(new JQuery(root,c));
+		}
+		return this;
+	}
+
+	public function show() {
+		for( s in select )
+			s.getStyle(true).display = true;
+		return this;
+	}
+
+	public function hide() {
+		for( s in select )
+			s.getStyle(true).display = false;
+		return this;
+	}
+
+	public function toggle() {
+		for( s in select ) {
+			var s = s.getStyle(true);
+			s.display = !s.display;
+		}
+		return this;
+	}
+
+	public function iterator() {
+		var it = select.iterator();
+		return {
+			hasNext : it.hasNext,
+			next : function() return new JQuery(root, it.next()),
+		};
 	}
 
 	function _get_val() : Dynamic {
@@ -55,7 +142,7 @@ class JQuery {
 			case "itemlist":
 				cast(c, h2d.comp.ItemList).selected = v;
 			case "select":
-				cast(c, h2d.comp.Select).value = v;
+				cast(c, h2d.comp.Select).setValue(v);
 			default:
 				null;
 			}
@@ -74,7 +161,7 @@ class JQuery {
 			"";
 		}
 	}
-	
+
 	function _set_text(v:String) {
 		for( c in select )
 			switch( c.name ) {
@@ -86,7 +173,7 @@ class JQuery {
 			}
 		return this;
 	}
-	
+
 	function _set_style(v:String) {
 		var s = new h2d.css.Style();
 		new h2d.css.Parser().parse(v, s);
@@ -94,7 +181,7 @@ class JQuery {
 			c.addStyle(s);
 		return this;
 	}
-	
+
 	function getSet( query : Dynamic ) {
 		var set;
 		if( query == null )
@@ -105,28 +192,35 @@ class JQuery {
 			var a : Array<Dynamic> = query;
 			for( v in a ) if( !Std.is(v, Component) ) throw "Invalid JQuery "+query;
 			set = a;
-		} else if( Std.is(query, String) ) {
-			set = lookupSet(query);
-		} else
+		} else if( Std.is(query, String) )
+			set = lookup(root, query);
+		else
 			throw "Invalid JQuery " + query;
 		return set;
 	}
-	
-	function lookupSet( query : String ) {
-		var classes = new h2d.css.Parser().parseClasses(query);
+
+	function lookup( root : Component, query : String ) {
 		var set = [];
-		lookupRec(root, classes, set);
+		lookupRec(root, parseQuery(query), set);
 		return set;
 	}
-	
-	function lookupRec(comp:Component, classes:Array<CssClass>, set : Array<Component> ) {
-		for( c in classes )
-			if( h2d.css.Engine.ruleMatch(c, comp) ) {
-				set.push(comp);
-				break;
-			}
-		for( s in comp.components )
-			lookupRec(s, classes, set);
+
+	function parseQuery(q) : Query {
+		return new h2d.css.Parser().parseClasses(q);
 	}
-	
+
+	function matchQuery(q:Query, comp:Component) {
+		for( r in q )
+			if( h2d.css.Engine.ruleMatch(r, comp) )
+				return true;
+		return false;
+	}
+
+	function lookupRec(comp:Component, q, set : Array<Component> ) {
+		if( matchQuery(q, comp) )
+			set.push(comp);
+		for( s in comp.components )
+			lookupRec(s, q, set);
+	}
+
 }

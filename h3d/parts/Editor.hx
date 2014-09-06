@@ -24,8 +24,8 @@ private typedef Curve = {
 	var pointSelected : h2d.col.Point;
 }
 
-class Editor extends h2d.Sprite {
-	
+class Editor extends h2d.Sprite implements Randomized {
+
 	var emit : Emitter;
 	var state : State;
 	var curState : String;
@@ -49,9 +49,11 @@ class Editor extends h2d.Sprite {
 	var cedit : h2d.Interactive;
 	var undo : Array<History>;
 	var redo : Array<History>;
-	var currentFilePath : String;
+	var randomValue : Float;
+	public var currentFilePath : String;
 	public var autoLoop : Bool = true;
-	
+	public var moveEmitter(default,set) : Bool = false;
+
 	static var CURVES : Array<{ name : String, f : Curve -> Data.Value }> = [
 		{ name : "Const", f : function(c) return VConst(c.min) },
 		{ name : "Linear", f : function(c) return VLinear(c.min, c.max - c.min) },
@@ -62,12 +64,12 @@ class Editor extends h2d.Sprite {
 		{ name : "Random", f : function(c) return VRandom(c.min, c.max - c.min, c.converge) },
 	];
 
-	
+
 	static function solvePoly( c : Curve ) {
 
 		if( c.points == null )
 			c.points = [new h2d.col.Point(0, c.min/c.max), new h2d.col.Point(1, 1)];
-		
+
 		var xvals = [for( p in c.points ) p.x];
 		var yvals = [for( p in c.points ) p.y * c.max];
 		var pts = [];
@@ -81,33 +83,39 @@ class Editor extends h2d.Sprite {
 			beta.pop();
 		return VPoly(beta,pts);
 	}
-	
+
 	public function new(emiter, ?parent) {
 		super(parent);
 		this.emit = emiter;
 		init();
 		setState(emit.state);
 	}
-	
+
 	public dynamic function onTextureSelect() {
 		hxd.File.browse(function(sel) {
 			sel.load(function(bytes) {
-				var bmp = hxd.res.Any.fromBytes(sel.fileName, bytes).toBitmap();
-				var t = h2d.Tile.fromBitmap(bmp);
-				bmp.dispose();
-				state.textureName = sel.fileName;
-				curState = null; // force reload (if texture was changed)
-				setTexture(t);
-				buildUI();
+				changeTexture(sel.fileName, hxd.res.Any.fromBytes(sel.fileName, bytes).toTile());
 			});
 		},{
 			defaultPath : currentFilePath,
 			title : "Please select the texture",
-			relativePath : true,
 			fileTypes : [{ name : "Images", extensions : ["png","jpg","jpeg","gif"] }],
 		});
 	}
-	
+
+	public function changeTexture( name : String, t : h2d.Tile ) {
+		state.textureName = name;
+		curState = null; // force reload (if texture was changed)
+		setTexture(t);
+		buildUI();
+	}
+
+	function set_moveEmitter(v) {
+		this.moveEmitter = v;
+		buildUI();
+		return v;
+	}
+
 	public dynamic function loadTexture( textureName : String ) : h2d.Tile {
 		var bytes = null;
 		try {
@@ -120,7 +128,7 @@ class Editor extends h2d.Sprite {
 		}
 		return bytes == null ? null : hxd.res.Any.fromBytes(textureName,bytes).toTile();
 	}
-	
+
 	public dynamic function onLoad() {
 		hxd.File.browse(function(sel) {
 			currentFilePath = sel.fileName;
@@ -128,7 +136,7 @@ class Editor extends h2d.Sprite {
 				var s = State.load(data, function(name) {
 					var t = loadTexture(name);
 					if( t == null ) {
-						t = h2d.Tile.fromColor(0xFF800000);
+						t = h2d.Tile.fromColor(0x800000);
 						// try dynamic loading. Will most likely fail since the path is relative
 						hxd.File.load(name, function(bytes) {
 							setTexture(hxd.res.Any.fromBytes(name, bytes).toTile());
@@ -143,8 +151,14 @@ class Editor extends h2d.Sprite {
 			fileTypes : [{ name : "Particle Effect", extensions : ["p"] }],
 		});
 	}
-	
+
 	public dynamic function onSave( saveData ) {
+		if( currentFilePath != null )
+			try {
+				hxd.File.saveBytes(currentFilePath, saveData);
+				return;
+			} catch( e : Dynamic ) {
+			}
 		if( currentFilePath == null ) currentFilePath = "default.p";
 		hxd.File.saveAs(saveData, {
 			defaultPath : currentFilePath,
@@ -152,7 +166,7 @@ class Editor extends h2d.Sprite {
 			saveFileName : function(path) currentFilePath = path,
 		});
 	}
-	
+
 	public function setState(s) {
 		undo = [];
 		redo = [];
@@ -170,7 +184,7 @@ class Editor extends h2d.Sprite {
 		buildUI();
 		emit.reset();
 	}
-	
+
 	override function onAlloc() {
 		super.onAlloc();
 		getScene().addEventListener(onEvent);
@@ -180,7 +194,16 @@ class Editor extends h2d.Sprite {
 		super.onDelete();
 		getScene().addEventListener(onEvent);
 	}
-	
+
+	var time : Float = 0.;
+	public dynamic function onMoveEmitter(dt:Float) {
+		time += dt * 0.03 * 60;
+		var r = 1;
+		emit.x = Math.cos(time) * r;
+		emit.y = Math.sin(time * 0.5) * r;
+		emit.z = (Math.cos(time * 1.3) * Math.sin(time * 1.5) + 1) * r;
+	}
+
 	function onEvent( e : hxd.Event ) {
 		function loadHistory( h : History ) {
 			curState = h.state;
@@ -215,7 +238,7 @@ class Editor extends h2d.Sprite {
 		default:
 		}
 	}
-	
+
 	function buildUI() {
 		if( ui != null ) ui.remove();
 		ui = h2d.comp.Parser.fromHtml('
@@ -224,7 +247,7 @@ class Editor extends h2d.Sprite {
 					* {
 						font-size : 12px;
 					}
-					
+
 					h1 {
 						font-size : 10px;
 						color : #BBB;
@@ -233,7 +256,7 @@ class Editor extends h2d.Sprite {
 					.body {
 						layout : dock;
 					}
-					
+
 					span {
 						padding-top : 2px;
 					}
@@ -250,7 +273,7 @@ class Editor extends h2d.Sprite {
 						layout : vertical;
 						margin-bottom : 10px;
 					}
-					
+
 					.sep {
 						margin-top : -10px;
 						margin-bottom : -2px;
@@ -258,11 +281,11 @@ class Editor extends h2d.Sprite {
 						width : 200px;
 						background-color : #555;
 					}
-					
+
 					span.label {
 						width : 97px;
 					}
-					
+
 					.buttons {
 						layout : inline;
 					}
@@ -270,7 +293,7 @@ class Editor extends h2d.Sprite {
 					.line {
 						layout : horizontal;
 					}
-					
+
 					.ic, .icol {
 						icon : url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAB3RJTUUH3QsHEDot9CONhQAAABd0RVh0U29mdHdhcmUAR0xEUE5HIHZlciAzLjRxhaThAAAACHRwTkdHTEQzAAAAAEqAKR8AAAAEZ0FNQQAAsY8L/GEFAAAABmJLR0QA/wD/AP+gvaeTAAAARklEQVR4nGP4z/CfJMRAmQYIIFbDfwwGJvpPHQ249PxHdtJ/LHKkaMBtBAN+80jRgCMY8GrAFjMMBGMKI+Jor4EU1eRoAADB1BsCKErgdwAAAABJRU5ErkJggg=");
 						icon-top : 1px;
@@ -278,27 +301,27 @@ class Editor extends h2d.Sprite {
 						icon-color : #888;
 						padding-left : 20px;
 					}
-					
+
 					.ic:hover, .icol:hover {
 						icon-top : 0px;
 					}
-					
+
 					.icol {
 						icon-color : #AAA;
 						icon : url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAB3RJTUUH3QsICwAiCSUSqgAAABd0RVh0U29mdHdhcmUAR0xEUE5HIHZlciAzLjRxhaThAAAACHRwTkdHTEQzAAAAAEqAKR8AAAAEZ0FNQQAAsY8L/GEFAAAABmJLR0QA/wD/AP+gvaeTAAAAMklEQVR4nGMwIBEwAPFJWQVMlLHvLSYayRqcdmNBD8tFMNFI1kBa4vMnETD8Z/hPEgIAvqs9dJhBcSIAAAAASUVORK5CYII==");
 					}
-					
+
 					select, button, input {
 						icon-top : 2px;
 						width : 70px;
 						height : 11px;
 						padding-top : 2px;
 					}
-					
+
 					.box {
 						width : 95px;
 					}
-					
+
 					input {
 						height : 13px;
 						padding-top : 2px;
@@ -309,39 +332,39 @@ class Editor extends h2d.Sprite {
 						width : 310px;
 						layout : dock;
 					}
-					
+
 					.curve {
 						dock : bottom;
 						layout : vertical;
 						padding : 5px;
 						height : 165px;
 					}
-					
+
 					.curve .title {
 						width : 180px;
 						text-align : right;
 						padding: 2px 10px;
 						background-color : #202020;
 					}
-					
+
 					.tname {
 						width : 102px;
 					}
-					
+
 					#curve {
 						width : 300px;
 						height : 110px;
 						border : 1px solid #333;
 					}
-					
+
 					button.file {
 						width : 15px;
 					}
-					
+
 					.curve .val {
 						display : none;
 					}
-					
+
 					.m_const .v_min, .m_linear .v_min, .m_pow .v_min, .m_random .v_min, .m_cos .v_min, .m_sin .v_min {
 						display : block;
 					}
@@ -349,23 +372,23 @@ class Editor extends h2d.Sprite {
 					.m_linear .v_max, .m_pow .v_max, .m_random .v_max, .m_cos .v_max, .m_sin .v_max, .m_curve .v_max {
 						display : block;
 					}
-					
+
 					.m_pow .v_pow {
 						display : block;
 					}
-					
+
 					.m_cos .v_freq, .m_sin .v_freq {
 						display : block;
 					}
-					
+
 					.m_curve .v_prec, .m_curve .v_clear {
 						display : block;
 					}
-					
+
 					.m_random .v_rnd {
 						display : block;
 					}
-					
+
 					.v_rnd button {
 						width : auto;
 					}
@@ -373,10 +396,10 @@ class Editor extends h2d.Sprite {
 					.v_rnd select {
 						width : 40px;
 					}
-					
+
 				</style>
 				<div class="main panel">
-				
+
 					<h1>Global</h1>
 					<div class="sep"></div>
 					<div class="col">
@@ -386,6 +409,7 @@ class Editor extends h2d.Sprite {
 						</div>
 						<div class="line">
 							<span class="label">Start Delay</span> <value value="${state.delay}" onchange="api.s.delay = this.value"/>
+							<checkbox checked="${state.is3D}" onchange="api.s.is3D = this.checked"/> <span>3D</span>
 						</div>
 						<div class="line">
 							<select onchange="api.s.blendMode = api.blendModes[api.parseInt(this.value)]; $(\'.ic.alpha\').toggleClass(\':disabled\', api.s.blendMode.index == 2)">
@@ -405,7 +429,7 @@ class Editor extends h2d.Sprite {
 							<button class="ic" value="Size" onclick="api.editCurve(\'globalSize\')"/>
 						</div>
 					</div>
-					
+
 					<h1>Emit</h1>
 					<div class="sep"></div>
 					<div class="col">
@@ -430,14 +454,26 @@ class Editor extends h2d.Sprite {
 							</div>
 						</div>
 						<div class="line">
-							<checkbox checked="${state.emitFromShell}" onchange="api.s.emitFromShell = this.checked"/> <span>Emit from Shell</span>
+							<div class="box">
+								<checkbox checked="${state.emitTrail}" onchange="api.s.emitTrail = this.checked"/> <span>Trail</span>
+							</div>
+							<div class="box">
+								<checkbox checked="${state.randomDir}" onchange="api.s.randomDir = this.checked"/> <span>Rand. Dir</span>
+							</div>
 						</div>
 						<div class="line">
-							<checkbox checked="${state.randomDir}" onchange="api.s.randomDir = this.checked"/> <span>Random Dir</span>
+							<div class="box">
+								<checkbox checked="${state.emitLocal}" onchange="api.s.emitLocal = this.checked"/> <span>Local</span>
+							</div>
+							<div class="box">
+								<checkbox checked="${state.emitFromShell}" onchange="api.s.emitFromShell = this.checked"/> <span>From Shell</span>
+							</div>
 						</div>
-						<!-- TODO : Bursts edition -->
+						<div class="line">
+							<checkbox checked="${this.moveEmitter}" onchange="api.setMove(this.checked)"/> <span>Move Emitter</span>
+						</div>
 					</div>
-					
+
 					<h1>Particle</h1>
 					<div class="sep"></div>
 					<div class="col">
@@ -454,7 +490,7 @@ class Editor extends h2d.Sprite {
 							<button class="ic" value="Light" onclick="api.editCurve(\'light\')"/>
 						</div>
 					</div>
-					
+
 					<h1>Animation</h1>
 					<div class="sep"></div>
 					<div class="col">
@@ -466,7 +502,7 @@ class Editor extends h2d.Sprite {
 							<button disabled="${state.frames == null || state.frames.length <= 1}" class="ic" value="Frame" onclick="api.editCurve(\'frame\')"/>
 						</div>
 					</div>
-					
+
 					<h1>Collide</h1>
 					<div class="sep"></div>
 					<div class="col">
@@ -478,7 +514,7 @@ class Editor extends h2d.Sprite {
 							<checkbox checked="${state.collideKill}" onchange="api.s.collideKill = this.checked"/> <span>Kill</span>
 						</div>
 					</div>
-					
+
 					<h1>Play</h1>
 					<div class="sep"></div>
 					<div style="layout:dock;width:200px">
@@ -569,6 +605,7 @@ class Editor extends h2d.Sprite {
 			selectTexture : function() onTextureSelect(),
 			load : function() onLoad(),
 			save : function() onSave(haxe.io.Bytes.ofString(curState)),
+			setMove : function(b) moveEmitter = b,
 		});
 		addChildAt(ui,0);
 		stats = cast ui.getElementById("stats");
@@ -583,7 +620,7 @@ class Editor extends h2d.Sprite {
 		cedit.onKeyDown = onCurveEvent;
 		setCurveMode(curve.mode);
 	}
-	
+
 	function toggleSplit() {
 		if( state.frames.length == 1 ) {
 			state.frame = VLinear(0,1);
@@ -596,13 +633,13 @@ class Editor extends h2d.Sprite {
 		}
 		buildUI();
 	}
-	
+
 	function clearCurve() {
 		curve.points = [new h2d.col.Point(0, curve.min/curve.max), new h2d.col.Point(1, 1)];
 		curve.freq = 2;
 		buildUI();
 	}
-	
+
 	function onCurveEvent( e : hxd.Event ) {
 		if( !curve.value.match(VPoly(_)) )
 			return;
@@ -651,7 +688,7 @@ class Editor extends h2d.Sprite {
 		default:
 		}
 	}
-	
+
 	function editColors() {
 		if( grad != null ) {
 			grad.remove();
@@ -673,7 +710,7 @@ class Editor extends h2d.Sprite {
 			if( !found ) state.colors = null;
 		};
 	}
-	
+
 	function editCurve( name : String, isShape : Bool = false ) {
 		if( curve.name == name && curve.shape == isShape ) {
 			curve.name = null;
@@ -698,10 +735,14 @@ class Editor extends h2d.Sprite {
 		rebuildCurve();
 		buildUI();
 	}
-	
+
+	public function rand() {
+		return randomValue;
+	}
+
 	function init() {
 		var bg = new hxd.BitmapData(300, 110);
-		bg.clear(0xFF202020);
+		bg.clear(0x202020);
 		for( h in [0, bg.height >> 1, bg.height - 1] )
 			bg.line(0, h, bg.width - 1, h, 0xFF101010);
 		for( h in [bg.height * 0.25, bg.height * 0.75] ) {
@@ -710,14 +751,14 @@ class Editor extends h2d.Sprite {
 		}
 		curveBG = h2d.Tile.fromBitmap(bg);
 		bg.dispose();
-		curveTexture = 	h2d.Tile.fromTexture(h3d.Engine.getCurrent().mem.allocTexture(512, 512)).sub(0, 0, curveBG.width, curveBG.height);
+		curveTexture = h2d.Tile.fromTexture(new h3d.mat.Texture(512, 512)).sub(0, 0, curveBG.width, curveBG.height);
 	}
-	
+
 	function rebuildCurve() {
 		var bmp = new hxd.BitmapData(512, 512);
 		var width = curveTexture.width, height = curveTexture.height;
 		var yMax;
-		
+
 		switch( curve.value ) {
 		case VConst(v): yMax = Math.abs(v);
 		case VRandom(min, len,_), VLinear(min, len), VPow(min,len,_): yMax = Math.max(Math.abs(min), Math.abs(min + len));
@@ -733,8 +774,8 @@ class Editor extends h2d.Sprite {
 		case VCustom(_):
 			throw "assert";
 		}
-		
-		
+
+
 		var sy = 1.;
 		var k = 0;
 		while( yMax > 100 * curve.incr ) {
@@ -745,7 +786,7 @@ class Editor extends h2d.Sprite {
 		}
 		sy /= (100 * curve.incr);
 		curve.scaleY = sy;
-		
+
 		inline function posX(x:Float) {
 			return Std.int(x * (width - 1));
 		}
@@ -754,8 +795,10 @@ class Editor extends h2d.Sprite {
 		}
 		for( x in 0...width ) {
 			var px = x / (width - 1);
-			var py0 = state.eval(curve.value, px, function() return 0.);
-			var py1 = state.eval(curve.value, px, function() return 1.);
+			randomValue = 0;
+			var py0 = State.eval(curve.value, px, this, null);
+			randomValue = 1;
+			var py1 = State.eval(curve.value, px, this, null);
 			var iy0 = posY(py0);
 			if( py0 != py1 ) {
 				var iy1 = posY(py1);
@@ -766,7 +809,7 @@ class Editor extends h2d.Sprite {
 			}
 			bmp.setPixel(x, iy0, 0xFFFF0000);
 		}
-		
+
 		switch( curve.value ) {
 		case VPoly(_):
 			for( p in curve.points ) {
@@ -779,11 +822,11 @@ class Editor extends h2d.Sprite {
 			}
 		default:
 		}
-		
+
 		curveTexture.getTexture().uploadBitmap(bmp);
 		bmp.dispose();
 	}
-	
+
 	function initCurve( v : Value ) {
 		var c : Curve = {
 			value : null,
@@ -835,7 +878,7 @@ class Editor extends h2d.Sprite {
 		}
 		return c;
 	}
-	
+
 	function getShapeValue( value : String ) {
 		return switch( [state.shape, value] ) {
 		case [(SLine(v) | SSphere(v) | SCone(v, _) | SDisc(v)), "size"]: v;
@@ -843,7 +886,7 @@ class Editor extends h2d.Sprite {
 		default: VConst(0);
 		}
 	}
-	
+
 	function rebuildShape( mode : Int, getValue ) {
 		var size = getValue("size");
 		state.shape = switch( mode ) {
@@ -854,12 +897,12 @@ class Editor extends h2d.Sprite {
 		default: throw "Unknown shape #" + mode;
 		}
 	}
-	
+
 	function setCurShape( mode : Int ) {
 		rebuildShape(mode, getShapeValue);
 		buildUI();
 	}
-	
+
 	function setCurveMode( mode : Int ) {
 		var cm = ui.getElementById("curve").getParent();
 		cm.removeClass("m_" + CURVES[curve.mode].name.toLowerCase());
@@ -872,7 +915,7 @@ class Editor extends h2d.Sprite {
 		} else
 			updateCurve();
 	}
-	
+
 	function updateCurve() {
 		curve.value = CURVES[curve.mode].f(curve);
 		if( curve.name != null ) {
@@ -884,13 +927,13 @@ class Editor extends h2d.Sprite {
 		rebuildCurve();
 	}
 
-	public function setTexture( t : h2d.Tile ) {
+	function setTexture( t : h2d.Tile ) {
 		state.frames = [t];
 		curTile = t;
 		state.initFrames();
 	}
-	
-	override function sync( ctx : h3d.scene.RenderContext ) {
+
+	override function sync( ctx : h2d.RenderContext ) {
 		// if resized, let's reflow our ui
 		if( ctx.engine.width != width || ctx.engine.height != height ) {
 			ui.refresh();
@@ -915,8 +958,14 @@ class Editor extends h2d.Sprite {
 			redo = [];
 		}
 		emit.speed = props.pause ? 0 : (props.slow ? 0.1 : 1);
+		if( moveEmitter ) onMoveEmitter(ctx.elapsedTime);
 		var pcount = emit.count;
-		if( stats != null ) stats.text = hxd.Math.fmt(emit.time * state.globalLife) + " s\n" + pcount + " p\n" + hxd.Math.fmt(ctx.engine.fps) + " fps" + ("\n"+getScene().getSpritesCount());
+		if( stats != null )
+			stats.text = [
+				hxd.Math.fmt(emit.time * state.globalLife) + " s",
+				pcount + " parts",
+				hxd.Math.fmt(ctx.engine.fps) + " fps",
+			].join("\n");
 		if( autoLoop && !emit.isActive() ) {
 			if( lastPartSeen == null )
 				lastPartSeen = emit.time;
@@ -934,15 +983,15 @@ class Editor extends h2d.Sprite {
 			}
 		} else
 			lastPartSeen = null;
-			
+
 		if( grad != null ) {
 			grad.x = width - 680;
 			grad.y = height - 190;
 			grad.colorPicker.x = grad.boxWidth - 180;
 			grad.colorPicker.y = -321;
 		}
-			
+
 		super.sync(ctx);
 	}
-	
+
 }

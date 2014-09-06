@@ -1,11 +1,10 @@
 package h2d;
 
 enum BlendMode {
-	Normal;
 	None;
+	Alpha;
 	Add;
 	SoftAdd;
 	Multiply;
 	Erase;
-	Hide;
 }
