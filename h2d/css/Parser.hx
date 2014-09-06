@@ -574,8 +574,6 @@ class Parser {
 				if ( StringTools.startsWith(url, "res:///") ) {
                     url = url.substr(7);
                     var image: hxd.res.Image = hxd.Res.loader.load(url).toImage();
-                    trace('css parser get image ' + url);
-                    trace(image);
                     return image.getPixels();
                 } else {
                     return null;
@@ -598,7 +596,6 @@ class Parser {
         var endpos = pos + 30;
         if (endpos > css.length) endpos = css.length;
         var part = css.substring(startpos, endpos);
-        trace(part);
 		throw "Unexpected " + Std.string(t) + " at " + Std.string(pos) + " '" + part + "'";
 		return null;
 	}
