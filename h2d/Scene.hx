@@ -5,25 +5,27 @@ class Scene extends Layers implements h3d.IDrawable {
 
 	public var width(default,null) : Int;
 	public var height(default, null) : Int;
-	
+
 	public var mouseX(get, null) : Float;
 	public var mouseY(get, null) : Float;
-	
+
+	public var zoom(get, set) : Int;
+
 	var fixedSize : Bool;
 	var interactive : Array<Interactive>;
 	var pendingEvents : Array<hxd.Event>;
 	var ctx : RenderContext;
 	var stage : hxd.Stage;
-	
+
 	@:allow(h2d.Interactive)
 	var currentOver : Interactive;
 	@:allow(h2d.Interactive)
 	var currentFocus : Interactive;
-		
+
 	var pushList : Array<Interactive>;
 	var currentDrag : { f : hxd.Event -> Void, onCancel : Void -> Void, ref : Null<Int> };
 	var eventListeners : Array< hxd.Event -> Void >;
-	
+
 	public function new() {
 		super(null);
 		var e = h3d.Engine.getCurrent();
@@ -36,7 +38,25 @@ class Scene extends Layers implements h3d.IDrawable {
 		stage = hxd.Stage.getInstance();
 		posChanged = true;
 	}
-	
+
+	function get_zoom() {
+		return Std.int(h3d.Engine.getCurrent().width / width);
+	}
+
+	function set_zoom(v:Int) {
+		var e = h3d.Engine.getCurrent();
+		var stage = hxd.Stage.getInstance();
+		var twidth = Math.ceil(stage.width / v);
+		var theight = Math.ceil(stage.height / v);
+		var totalWidth = twidth * v;
+		var totalHeight = theight * v;
+		// increase back buffer size if necessary
+		if( totalWidth != e.width || totalHeight != e.height )
+			e.resize(totalWidth, totalHeight);
+		setFixedSize(twidth, theight);
+		return v;
+	}
+
 	public function setFixedSize( w, h ) {
 		width = w;
 		height = h;
@@ -44,24 +64,31 @@ class Scene extends Layers implements h3d.IDrawable {
 		posChanged = true;
 	}
 
+	public function checkResize() {
+		if( fixedSize ) return;
+		var engine = h3d.Engine.getCurrent();
+		if( width != engine.width || height != engine.height ) {
+			width = engine.width;
+			height = engine.height;
+			posChanged = true;
+		}
+	}
+
 	override function onAlloc() {
 		stage.addEventTarget(onEvent);
 		super.onAlloc();
 	}
-	
+
 	override function onDelete() {
 		stage.removeEventTarget(onEvent);
 		super.onDelete();
 	}
-	
+
 	function onEvent( e : hxd.Event ) {
-		if( pendingEvents != null ) {
-			e.relX = screenXToLocal(e.relX);
-			e.relY = screenYToLocal(e.relY);
+		if( pendingEvents != null )
 			pendingEvents.push(e);
-		}
 	}
-	
+
 	function screenXToLocal(mx:Float) {
 		return (mx - x) * width / (stage.width * scaleX);
 	}
@@ -69,7 +96,7 @@ class Scene extends Layers implements h3d.IDrawable {
 	function screenYToLocal(my:Float) {
 		return (my - y) * height / (stage.height * scaleY);
 	}
-	
+
 	function get_mouseX() {
 		return screenXToLocal(stage.mouseX);
 	}
@@ -77,7 +104,7 @@ class Scene extends Layers implements h3d.IDrawable {
 	function get_mouseY() {
 		return screenYToLocal(stage.mouseY);
 	}
-	
+
 	function dispatchListeners( event : hxd.Event ) {
 		event.propagate = true;
 		event.cancel = false;
@@ -107,27 +134,27 @@ class Scene extends Layers implements h3d.IDrawable {
 		default:
 		}
 		for( i in interactive ) {
-			
+
 			// this is a bit tricky since we are not in the not-euclide viewport space
 			// (r = ratio correction)
 			var dx = rx - i.absX;
 			var dy = ry - i.absY;
-			
+
 			var w1 = i.width * i.matA * r;
 			var h1 = i.width * i.matC;
 			var ky = h1 * dx - w1 * dy;
 			// up line
 			if( ky < 0 )
 				continue;
-				
+
 			var w2 = i.height * i.matB * r;
 			var h2 = i.height * i.matD;
 			var kx = w2 * dy - h2 * dx;
-				
+
 			// left line
 			if( kx < 0 )
 				continue;
-			
+
 			var max = h1 * w2 - w1 * h2;
 			// bottom/right
 			if( ky >= max || kx * r >= max )
@@ -144,12 +171,12 @@ class Scene extends Layers implements h3d.IDrawable {
 				p = p.parent;
 			}
 			if( !visible ) continue;
-			
+
 			event.relX = (kx * r / max) * i.width;
 			event.relY = (ky / max) * i.height;
-			
+
 			i.handleEvent(event);
-			
+
 			if( event.cancel )
 				event.cancel = false;
 			else if( checkOver ) {
@@ -184,12 +211,12 @@ class Scene extends Layers implements h3d.IDrawable {
 				if( cancelFocus && i == currentFocus )
 					cancelFocus = false;
 			}
-				
+
 			if( event.propagate ) {
 				event.propagate = false;
 				continue;
 			}
-			
+
 			handled = true;
 			break;
 		}
@@ -210,11 +237,11 @@ class Scene extends Layers implements h3d.IDrawable {
 			dispatchListeners(event);
 		}
 	}
-	
+
 	function hasEvents() {
 		return interactive.length > 0 || eventListeners.length > 0;
 	}
-	
+
 	public function checkEvents() {
 		if( pendingEvents == null ) {
 			if( !hasEvents() )
@@ -225,46 +252,49 @@ class Scene extends Layers implements h3d.IDrawable {
 		if( old.length == 0 )
 			return;
 		pendingEvents = null;
-		var ox = 0., oy = 0.;
 		for( e in old ) {
-			var hasPos = switch( e.kind ) {
-			case EKeyUp, EKeyDown: false;
-			default: true;
-			}
-			
-			if( hasPos ) {
-				ox = e.relX;
-				oy = e.relY;
-			}
-			
+			var ox = e.relX, oy = e.relY;
+			e.relX = screenXToLocal(ox);
+			e.relY = screenYToLocal(oy);
+
 			if( currentDrag != null && (currentDrag.ref == null || currentDrag.ref == e.touchId) ) {
 				currentDrag.f(e);
-				if( e.cancel )
+				if( e.cancel ) {
+					e.relX = ox;
+					e.relY = oy;
 					continue;
+				}
 			}
+
 			emitEvent(e);
+
 			/*
 				We want to make sure that after we have pushed, we send a release even if the mouse
 				has been outside of the Interactive (release outside). We will reset the mouse button
 				to prevent click to be generated
 			*/
 			if( e.kind == ERelease && pushList.length > 0 ) {
+				e.relX = screenXToLocal(ox);
+				e.relY = screenYToLocal(oy);
 				for( i in pushList ) {
-					// relX/relY is not correct here
 					if( i == null )
 						dispatchListeners(e);
 					else {
 						@:privateAccess i.isMouseDown = -1;
+						// relX/relY not good here
 						i.handleEvent(e);
 					}
 				}
 				pushList = new Array();
 			}
+
+			e.relX = ox;
+			e.relY = oy;
 		}
 		if( hasEvents() )
 			pendingEvents = new Array();
 	}
-	
+
 	public function addEventListener( f : hxd.Event -> Void ) {
 		eventListeners.push(f);
 	}
@@ -272,21 +302,21 @@ class Scene extends Layers implements h3d.IDrawable {
 	public function removeEventListener( f : hxd.Event -> Void ) {
 		return eventListeners.remove(f);
 	}
-	
+
 	public function startDrag( f : hxd.Event -> Void, ?onCancel : Void -> Void, ?refEvent : hxd.Event ) {
 		if( currentDrag != null && currentDrag.onCancel != null )
 			currentDrag.onCancel();
 		currentDrag = { f : f, ref : refEvent == null ? null : refEvent.touchId, onCancel : onCancel };
 	}
-	
+
 	public function stopDrag() {
 		currentDrag = null;
 	}
-	
+
 	public function getFocus() {
 		return currentFocus;
 	}
-	
+
 	@:allow(h2d)
 	function addEventTarget(i:Interactive) {
 		// sort by which is over the other in the scene hierarchy
@@ -338,7 +368,7 @@ class Scene extends Layers implements h3d.IDrawable {
 		}
 		interactive.push(i);
 	}
-	
+
 	@:allow(h2d)
 	function removeEventTarget(i) {
 		for( k in 0...interactive.length )
@@ -356,17 +386,18 @@ class Scene extends Layers implements h3d.IDrawable {
 		matD = scaleY;
 		absX = x;
 		absY = y;
-		
+
 		// adds a pixels-to-viewport transform
 		var w = 2 / width;
 		var h = -2 / height;
 		absX = absX * w - 1;
 		absY = absY * h + 1;
+
 		matA *= w;
 		matB *= h;
 		matC *= w;
 		matD *= h;
-		
+
 		// perform final rotation around center
 		if( rotation != 0 ) {
 			var cr = Math.cos(rotation);
@@ -385,25 +416,27 @@ class Scene extends Layers implements h3d.IDrawable {
 			absY = tmpY;
 		}
 	}
-	
+
 	public function dispose() {
 		if( allocated )
 			onDelete();
 	}
-	
+
 	public function setElapsedTime( v : Float ) {
 		ctx.elapsedTime = v;
 	}
-	
+
 	public function render( engine : h3d.Engine ) {
 		ctx.engine = engine;
 		ctx.frame++;
 		ctx.time += ctx.elapsedTime;
-		ctx.currentPass = 0;
 		sync(ctx);
+		if( childs.length == 0 ) return;
+		ctx.begin();
 		drawRec(ctx);
+		ctx.end();
 	}
-	
+
 	override function sync( ctx : RenderContext ) {
 		if( !allocated )
 			onAlloc();
@@ -412,10 +445,9 @@ class Scene extends Layers implements h3d.IDrawable {
 			height = ctx.engine.height;
 			posChanged = true;
 		}
-		Tools.checkCoreObjects();
 		super.sync(ctx);
 	}
-	
+
 	public function captureBitmap( ?target : Tile ) {
 		var engine = h3d.Engine.getCurrent();
 		if( target == null ) {
@@ -438,6 +470,6 @@ class Scene extends Layers implements h3d.IDrawable {
 		engine.end();
 		return new Bitmap(target);
 	}
-	
-	
+
+
 }

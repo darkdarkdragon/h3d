@@ -3,7 +3,6 @@ import h2d.css.Defs;
 
 class Component extends Sprite {
 
-	public var name(default, null) : String;
 	public var id(default, set) : String;
 	var parentComponent : Component;
 	var classes : Array<String>;
@@ -78,6 +77,13 @@ class Component extends Sprite {
 		return v;
 	}
 
+	override function onDelete() {
+		if( parentComponent != null ) {
+			parentComponent.components.remove(this);
+			parentComponent = null;
+		}
+		super.onDelete();
+	}
 
 	override function onAlloc() {
 		// lookup our parent component
@@ -101,14 +107,6 @@ class Component extends Sprite {
 		parentComponent = null;
 		super.onAlloc();
 	}
-
-	override function onDelete() {
-        if (parentComponent != null) {
-            parentComponent.components.remove(this);
-        }
-        super.onDelete();
-    }
-
 
 	public function addCss(cssString) {
 		if( styleSheet == null ) evalStyle();
@@ -277,8 +275,7 @@ class Component extends Sprite {
 				iconBmp.y = extTop() - style.paddingTop + style.iconTop;
 				iconBmp.tile = Context.makeTileIcon(style.icon);
 				iconBmp.colorKey = 0xFFFF00FF;
-				if( iconBmp.color == null ) iconBmp.color = new h3d.Vector(1, 1, 1, 1);
-				iconBmp.color.loadColor(style.iconColor != null ? style.iconColor : 0xFFFFFFFF);
+				iconBmp.color.setColor(style.iconColor != null ? style.iconColor : 0xFFFFFFFF);
 			} else if( iconBmp != null ) {
 				iconBmp.remove();
 				iconBmp = null;

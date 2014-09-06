@@ -84,14 +84,18 @@ class System {
 		case TextInput: "ibeam";
 		case Hide: "auto";
 		case Custom(frames, speed, offsetX, offsetY):
-			var customCursor = new flash.ui.MouseCursorData();
-			var v = new flash.Vector();
-			for( f in frames ) v.push(f.toNative());
-			customCursor.data = v;
-			customCursor.frameRate = speed;
-			customCursor.hotSpot = new flash.geom.Point(offsetX, offsetY);
-			flash.ui.Mouse.registerCursor("custom", customCursor);
-			"custom";
+			#if openfl
+				throw "not supported on openFL for now";
+			#else
+				var customCursor = new flash.ui.MouseCursorData();
+				var v = new flash.Vector();
+				for( f in frames ) v.push(f.toNative());
+				customCursor.data = v;
+				customCursor.frameRate = speed;
+				customCursor.hotSpot = new flash.geom.Point(offsetX, offsetY);
+				flash.ui.Mouse.registerCursor("custom", customCursor);
+				"custom";
+			#end
 		}
 		if( c == Hide ) flash.ui.Mouse.hide() else flash.ui.Mouse.show();
 	}
@@ -156,7 +160,7 @@ class System {
 		var canvas = js.Browser.document.getElementById("webgl");
 		if( canvas != null ) {
 			canvas.style.cursor = switch( c ) {
-			case Default:
+			case Default: "default";
 			case Button: "pointer";
 			case Move: "move";
 			case TextInput: "text";
@@ -187,19 +191,11 @@ class System {
 	}
 
 	static function get_width() {
-		var canvas: js.html.CanvasElement = cast js.Browser.document.getElementById("webgl");
-		if ( canvas != null ) {
-            return canvas.clientWidth;
-        }
-		return js.Browser.document.width;
+		return Math.round(js.Browser.document.body.clientWidth * js.Browser.window.devicePixelRatio);
 	}
 
 	static function get_height() {
-		var canvas: js.html.CanvasElement = cast js.Browser.document.getElementById("webgl");
-		if ( canvas != null ) {
-            return canvas.clientHeight;
-        }
-		return js.Browser.document.height;
+		return Math.round(js.Browser.document.body.clientHeight  * js.Browser.window.devicePixelRatio);
 	}
 
 	#elseif openfl
@@ -209,7 +205,8 @@ class System {
 	public static function setLoop( f : Void -> Void ) {
 		if( VIEW == null ) {
 			VIEW = new openfl.display.OpenGLView();
-			flash.Lib.current.addChild(VIEW);
+			VIEW.name = "glView";
+			flash.Lib.current.addChildAt(VIEW,0);
 		}
 		VIEW.render = function(_) if( f != null ) f();
 	}

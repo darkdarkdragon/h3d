@@ -1,18 +1,18 @@
 package h2d.comp;
 
 class Box extends Component {
-	
+
 	var active : Bool;
 	var input : h2d.Interactive;
 	var scrollX : Float = 0.;
 	var scrollY : Float = 0.;
-	
+
 	public function new(?layout,?parent) {
 		super("box", parent);
 		if( layout == null ) layout = h2d.css.Defs.Layout.Inline;
 		addClass(":"+layout.getName().toLowerCase());
 	}
-	
+
 	override function resizeRec( ctx : Context ) {
 		var extX = extLeft();
 		var extY = extTop();

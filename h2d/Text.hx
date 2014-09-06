@@ -13,14 +13,15 @@ class Text extends Drawable {
 	public var textColor(default, set) : Int;
 	public var maxWidth(default, set) : Null<Float>;
 	public var dropShadow : { dx : Float, dy : Float, color : Int, alpha : Float };
-	
+
 	public var textWidth(get, null) : Int;
 	public var textHeight(get, null) : Int;
 	public var textAlign(default, set) : Align;
-	public var letterSpacing(default,set) : Int;
-	
+	public var letterSpacing(default, set) : Int;
+	public var lineSpacing(default,set) : Int;
+
 	var glyphs : TileGroup;
-	
+
 	public function new( font : Font, ?parent ) {
 		super(parent);
 		this.font = font;
@@ -29,16 +30,16 @@ class Text extends Drawable {
 		text = "";
 		textColor = 0xFFFFFF;
 	}
-	
+
 	function set_font(font) {
 		this.font = font;
 		if( glyphs != null ) glyphs.remove();
 		glyphs = new TileGroup(font == null ? null : font.tile, this);
-		shader = glyphs.shader;
+		glyphs.visible = false;
 		rebuild();
 		return font;
 	}
-	
+
 	function set_textAlign(a) {
 		textAlign = a;
 		rebuild();
@@ -50,29 +51,38 @@ class Text extends Drawable {
 		rebuild();
 		return s;
 	}
-	
+
+	function set_lineSpacing(s) {
+		lineSpacing = s;
+		rebuild();
+		return s;
+	}
+
 	override function onAlloc() {
 		super.onAlloc();
 		rebuild();
 	}
-	
+
 	override function draw(ctx:RenderContext) {
-		glyphs.blendMode = blendMode;
 		if( dropShadow != null ) {
-			glyphs.x += dropShadow.dx;
-			glyphs.y += dropShadow.dy;
-			glyphs.calcAbsPos();
-			var old = glyphs.color;
-			glyphs.color = h3d.Vector.fromColor(dropShadow.color);
-			glyphs.color.w = dropShadow.alpha;
-			glyphs.draw(ctx);
-			glyphs.x -= dropShadow.dx;
-			glyphs.y -= dropShadow.dy;
-			glyphs.color = old;
+			var oldX = absX, oldY = absY;
+			absX += dropShadow.dx * matA + dropShadow.dy * matC;
+			absY += dropShadow.dx * matB + dropShadow.dy * matD;
+			var oldR = color.r;
+			var oldG = color.g;
+			var oldB = color.b;
+			var oldA = color.a;
+			color.setColor(dropShadow.color);
+			color.a = dropShadow.alpha;
+			glyphs.drawWith(ctx, this);
+			absX = oldX;
+			absY = oldY;
+			color.set(oldR, oldG, oldB, oldA);
+			calcAbsPos();
 		}
-		super.draw(ctx);
+		glyphs.drawWith(ctx,this);
 	}
-	
+
 	function set_text(t) {
 		var t = t == null ? "null" : t;
 		if( t == this.text ) return t;
@@ -80,11 +90,11 @@ class Text extends Drawable {
 		rebuild();
 		return t;
 	}
-	
+
 	function rebuild() {
 		if( allocated && text != null && font != null ) initGlyphs(text);
 	}
-	
+
 	public function calcTextWidth( text : String ) {
 		return initGlyphs(text,false).width;
 	}
@@ -104,6 +114,7 @@ class Text extends Drawable {
 			x = lines.shift();
 		default:
 		}
+		var dl = font.lineHeight + lineSpacing;
 		var calcLines = !rebuild && lines != null;
 		for( i in 0...text.length ) {
 			var cc = text.charCodeAt(i);
@@ -143,33 +154,34 @@ class Text extends Drawable {
 					}
 				else
 					x = 0;
-				y += font.lineHeight;
+				y += dl;
 				prevChar = -1;
 			} else
 				prevChar = cc;
 		}
 		if( calcLines ) lines.push(x);
-		return { width : x > xMax ? x : xMax, height : x > 0 ? y + font.lineHeight : y > 0 ? y : font.lineHeight };
+		return { width : x > xMax ? x : xMax, height : x > 0 ? y + dl : y > 0 ? y : dl };
 	}
-	
+
 	function get_textHeight() {
 		return initGlyphs(text,false).height;
 	}
-	
+
 	function get_textWidth() {
 		return initGlyphs(text,false).width;
 	}
-	
+
 	function set_maxWidth(w) {
 		maxWidth = w;
 		rebuild();
 		return w;
 	}
-	
+
 	function set_textColor(c) {
 		this.textColor = c;
-		glyphs.color = h3d.Vector.fromColor(c);
-		glyphs.color.w = alpha;
+		var a = alpha;
+		color.setColor(c);
+		color.w = a;
 		return c;
 	}
 

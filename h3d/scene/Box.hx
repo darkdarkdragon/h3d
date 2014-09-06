@@ -1,48 +1,34 @@
 package h3d.scene;
 
-class Box extends Object {
-	
-	public var depth : Bool;
+class Box extends Graphics {
+
 	public var color : Int;
-	
-	public function new( color = 0xFFFF0000, depth = true, ?parent) {
+
+	public function new( ?color = 0xFFFF0000, ?depth = true, ?parent) {
 		super(parent);
 		this.color = color;
-		this.depth = depth;
-	}
-	
-	override function draw( ctx : RenderContext ) {
-		// this ugliness needs some optimization...
-		
-		var dx = new h3d.Vector(absPos._11, absPos._12, absPos._13);
-		var dy = new h3d.Vector(absPos._21, absPos._22, absPos._23);
-		var dz = new h3d.Vector(absPos._31, absPos._32, absPos._33);
-		
-		var p = absPos.pos();
-		
-		p.x -= (dx.x + dy.x + dz.x) * 0.5;
-		p.y -= (dx.y + dy.y + dz.y) * 0.5;
-		p.z -= (dx.z + dy.z + dz.z) * 0.5;
-		
-		ctx.engine.lineP(p, p.add(dx), color, depth);
-		ctx.engine.lineP(p, p.add(dy), color, depth);
-		ctx.engine.lineP(p, p.add(dz), color, depth);
-		
-		ctx.engine.lineP(p.add(dx), p.add(dx).add(dz), color, depth);
-		ctx.engine.lineP(p.add(dy), p.add(dy).add(dz), color, depth);
-		
-		ctx.engine.lineP(p.add(dx), p.add(dx).add(dy), color, depth);
-		ctx.engine.lineP(p.add(dy), p.add(dx).add(dy), color, depth);
-		
-		ctx.engine.lineP(p.add(dx).add(dy), p.add(dx).add(dy).add(dz), color, depth);
-		
-		p = p.add(dz);
+		if( !depth ) material.mainPass.depth(true, Always);
 
-		ctx.engine.lineP(p, p.add(dx), color, depth);
-		ctx.engine.lineP(p, p.add(dy), color, depth);
-		ctx.engine.lineP(p.add(dx), p.add(dx).add(dy), color, depth);
-		ctx.engine.lineP(p.add(dy), p.add(dx).add(dy), color, depth);
-		ctx.engine.lineP(p.add(dy), p.add(dx).add(dy), color, depth);
+		var dx = new h3d.col.Point(1, 0, 0);
+		var dy = new h3d.col.Point(0, 1, 0);
+		var dz = new h3d.col.Point(0, 0, 1);
+		var p = new h3d.col.Point(-0.5,-0.5,-0.5);
+
+		lineStyle(1, color);
+		drawLine(p, p.add(dx));
+		drawLine(p, p.add(dy));
+		drawLine(p, p.add(dz));
+		drawLine(p.add(dx), p.add(dx).add(dz));
+		drawLine(p.add(dy), p.add(dy).add(dz));
+		drawLine(p.add(dx), p.add(dx).add(dy));
+		drawLine(p.add(dy), p.add(dx).add(dy));
+		drawLine(p.add(dx).add(dy), p.add(dx).add(dy).add(dz));
+		p = p.add(dz);
+		drawLine(p, p.add(dx));
+		drawLine(p, p.add(dy));
+		drawLine(p.add(dx), p.add(dx).add(dy));
+		drawLine(p.add(dy), p.add(dx).add(dy));
+		drawLine(p.add(dy), p.add(dx).add(dy));
 	}
 
 	public static function ofBounds( bounds : h3d.col.Bounds, ?parent : Object ) {
@@ -56,5 +42,5 @@ class Box extends Object {
 		b.scaleZ = bounds.zMax - bounds.zMin;
 		return b;
 	}
-	
+
 }

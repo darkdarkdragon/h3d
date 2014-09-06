@@ -1,10 +1,10 @@
 package h2d.css;
 import h2d.css.Defs;
 
-class Fill extends h2d.TileColorGroup {
+class Fill extends h2d.TileGroup {
 
 	public function new(?parent) {
-		super(h2d.Tile.fromColor(0xFFFFFFFF), parent);
+		super(h2d.Tile.fromColor(0xFFFFFF), parent);
 	}
 
 	public inline function fillRectColor(x, y, w, h, c) {

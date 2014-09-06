@@ -1,7 +1,7 @@
 package hxd;
 
 class Key {
-	
+
 	public static inline var BACKSPACE	= 8;
 	public static inline var TAB		= 9;
 	public static inline var ENTER		= 13;
@@ -20,9 +20,29 @@ class Key {
 	public static inline var DOWN		= 40;
 	public static inline var INSERT		= 45;
 	public static inline var DELETE		= 46;
-	
+
 	public static inline var NUMBER_0	= 48;
+	public static inline var NUMBER_1	= 49;
+	public static inline var NUMBER_2	= 50;
+	public static inline var NUMBER_3	= 51;
+	public static inline var NUMBER_4	= 52;
+	public static inline var NUMBER_5	= 53;
+	public static inline var NUMBER_6	= 54;
+	public static inline var NUMBER_7	= 55;
+	public static inline var NUMBER_8	= 56;
+	public static inline var NUMBER_9	= 57;
+
 	public static inline var NUMPAD_0	= 96;
+	public static inline var NUMPAD_1	= 97;
+	public static inline var NUMPAD_2	= 98;
+	public static inline var NUMPAD_3	= 99;
+	public static inline var NUMPAD_4	= 100;
+	public static inline var NUMPAD_5	= 101;
+	public static inline var NUMPAD_6	= 102;
+	public static inline var NUMPAD_7	= 103;
+	public static inline var NUMPAD_8	= 104;
+	public static inline var NUMPAD_9	= 105;
+
 	public static inline var A			= 65;
 	public static inline var F1			= 112;
 	public static inline var F2			= 113;
@@ -36,20 +56,20 @@ class Key {
 	public static inline var F10		= 121;
 	public static inline var F11		= 122;
 	public static inline var F12		= 123;
-	
+
 	public static inline var NUMPAD_MULT = 106;
 	public static inline var NUMPAD_ADD	= 107;
 	public static inline var NUMPAD_ENTER = 108;
 	public static inline var NUMPAD_SUB = 109;
 	public static inline var NUMPAD_DOT = 110;
 	public static inline var NUMPAD_DIV = 111;
-	
+
 	public static inline var MOUSE_LEFT = 0;
 	public static inline var MOUSE_RIGHT = 1;
-	
+
 	static var initDone = false;
 	static var keyPressed : Array<Int> = [];
-	
+
 	public static function isDown( code : Int ) {
 		return keyPressed[code] > 0;
 	}
@@ -72,7 +92,7 @@ class Key {
 		flash.Lib.current.stage.addEventListener(flash.events.Event.DEACTIVATE, onDeactivate);
 		#end
 	}
-	
+
 	public static function dispose() {
 		if( initDone ) {
 			Stage.getInstance().removeEventTarget(onEvent);
@@ -83,13 +103,13 @@ class Key {
 			keyPressed = [];
 		}
 	}
-	
+
 	#if flash
 	static function onDeactivate(_) {
 		keyPressed = [];
 	}
 	#end
-	
+
 	static function onEvent( e : Event ) {
 		switch( e.kind ) {
 		case EKeyDown:
